@@ -82,6 +82,53 @@
     user-select: none;
 }
 
+.route-button {
+    width: 100%;
+    padding: 0.6rem;
+    margin-bottom: 0.5rem;
+    border: none;
+    border-radius: 4px;
+    background: #3498db;
+    color: white;
+    font-size: clamp(0.8rem, 3vw, 0.9rem);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 44px;
+    touch-action: manipulation;
+}
+
+.route-button:hover {
+    background: #2980b9;
+    transform: translateY(-1px);
+}
+
+.route-button:active {
+    transform: translateY(0);
+}
+
+.route-button:disabled {
+    background: #bdc3c7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.route-status {
+    padding: 0.5rem;
+    border-radius: 4px;
+    background: #ecf0f1;
+    text-align: center;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.route-status span {
+    font-size: clamp(0.75rem, 2.8vw, 0.85rem);
+    font-weight: 500;
+}
+
 .route-disabled {
     display: flex;
     align-items: center;

@@ -1,0 +1,376 @@
+/**
+ * Simple test page for OSM routing functionality
+ */
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test OSM Routing - Langres Tour</title>
+    <link rel="stylesheet" href="/node_modules/leaflet/dist/leaflet.css" />
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 20px;
+        }
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        .btn-primary { background: #3498db; color: white; }
+        .btn-success { background: #27ae60; color: white; }
+        .btn-warning { background: #f39c12; color: white; }
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        .status-info { background: #e8f4f8; border-left: 4px solid #3498db; }
+        .status-success { background: #e8f6f3; border-left: 4px solid #27ae60; }
+        .status-warning { background: #fef5e7; border-left: 4px solid #f39c12; }
+        .status-error { background: #fdf2f2; border-left: 4px solid #e74c3c; }
+        #map { height: 400px; border-radius: 8px; }
+        .route-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-size: 13px;
+        }
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @media (max-width: 768px) {
+            .content { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🗺️ Test du Routage OSM</h1>
+            <p>Test des fonctionnalités de navigation piétonne avec OpenStreetMap</p>
+        </div>
+        
+        <div class="content">
+            <div class="controls">
+                <h3>Contrôles de Test</h3>
+                
+                <button id="assess-btn" class="btn btn-primary">
+                    📊 Évaluer Disponibilité OSM
+                </button>
+                
+                <button id="test-route-btn" class="btn btn-warning" disabled>
+                    🛤️ Tester Route Simple
+                </button>
+                
+                <button id="full-tour-btn" class="btn btn-success" disabled>
+                    🏰 Calculer Tour Complet
+                </button>
+                
+                <button id="clear-btn" class="btn btn-danger">
+                    🧹 Effacer Carte
+                </button>
+                
+                <div id="status-area">
+                    <div class="status status-info">
+                        ℹ️ Prêt pour les tests OSM
+                    </div>
+                </div>
+                
+                <div id="route-info" class="route-info" style="display: none;">
+                    <h4>Informations de Route</h4>
+                    <div id="route-details"></div>
+                </div>
+            </div>
+            
+            <div>
+                <h3>Carte Interactive</h3>
+                <div id="map"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/node_modules/leaflet/dist/leaflet.js"></script>
+    <script type="module">
+        import { OSMRoutingService } from './src/services/routing/OSMRoutingService.js';
+        
+        // Test POI data (first few POIs from Langres)
+        const testPOIs = [
+            { id: 1, name: "Porte des Moulins", lat: 47.8584, lon: 5.33279 },
+            { id: 2, name: "Tour Rouge", lat: 47.8588, lon: 5.3339 },
+            { id: 3, name: "Tour de Navarre", lat: 47.8602, lon: 5.32824 },
+            { id: 4, name: "Tour du Petit Sault", lat: 47.8613, lon: 5.32968 }
+        ];
+        
+        let map;
+        let routingService;
+        let routeLayers = [];
+        let poiMarkers = [];
+        
+        // Initialize map
+        function initMap() {
+            map = L.map('map').setView([47.8625, 5.3350], 15);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+            
+            // Add POI markers
+            testPOIs.forEach((poi, index) => {
+                const marker = L.marker([poi.lat, poi.lon])
+                    .addTo(map)
+                    .bindPopup(`<b>${poi.name}</b><br>POI ${index + 1}`);
+                poiMarkers.push(marker);
+            });
+        }
+        
+        // Initialize routing service
+        function initServices() {
+            routingService = new OSMRoutingService();
+        }
+        
+        // UI helper functions
+        function updateStatus(message, type = 'info', loading = false) {
+            const statusArea = document.getElementById('status-area');
+            const loadingIcon = loading ? '<span class="loading"></span>' : '';
+            statusArea.innerHTML = `
+                <div class="status status-${type}">
+                    ${loadingIcon}${message}
+                </div>
+            `;
+        }
+        
+        function updateRouteInfo(routeData) {
+            const routeInfo = document.getElementById('route-info');
+            const routeDetails = document.getElementById('route-details');
+            
+            if (routeData) {
+                let detailsHTML = `
+                    <p><strong>Distance:</strong> ${(routeData.summary.distance / 1000).toFixed(2)} km</p>
+                    <p><strong>Durée:</strong> ${Math.round(routeData.summary.duration / 60)} min</p>
+                    <p><strong>Segments:</strong> ${routeData.segments ? routeData.segments.length : 1}</p>
+                `;
+                
+                // Add fallback information if present
+                if (routeData.fallbackUsed) {
+                    detailsHTML += '<p><strong style="color: #f39c12;">⚠️ Mode Fallback:</strong> Utilisé</p>';
+                } else if (routeData.fallbackSegments > 0) {
+                    detailsHTML += `<p><strong style="color: #f39c12;">⚠️ Segments Fallback:</strong> ${routeData.fallbackSegments}/${routeData.segments.length}</p>`;
+                } else {
+                    detailsHTML += '<p><strong style="color: #27ae60;">✅ API OSM:</strong> Utilisé</p>';
+                }
+                
+                routeDetails.innerHTML = detailsHTML;
+                routeInfo.style.display = 'block';
+            } else {
+                routeInfo.style.display = 'none';
+            }
+        }
+        
+        function clearMap() {
+            routeLayers.forEach(layer => map.removeLayer(layer));
+            routeLayers = [];
+            updateRouteInfo(null);
+            updateStatus('Carte effacée', 'info');
+        }
+        
+        function addRouteToMap(routeData, color = '#e74c3c', weight = 4) {
+            if (!routeData.features || routeData.features.length === 0) return;
+            
+            const coordinates = routeData.features[0].geometry.coordinates.map(coord => [coord[1], coord[0]]);
+            
+            const routeLayer = L.polyline(coordinates, {
+                color: color,
+                weight: weight,
+                opacity: 0.8
+            }).addTo(map);
+            
+            routeLayers.push(routeLayer);
+            
+            // Fit map to route
+            map.fitBounds(routeLayer.getBounds(), { padding: [20, 20] });
+        }
+        
+        // Test functions
+        async function assessOSMAvailability() {
+            updateStatus('Évaluation de la disponibilité OSM en cours...', 'info', true);
+            
+            try {
+                const coordinates = testPOIs.map(poi => [poi.lat, poi.lon]);
+                const assessment = await routingService.assessPedestrianRouteAvailability(coordinates);
+                
+                console.log('🔍 Detailed assessment result:', assessment);
+                
+                if (assessment.available) {
+                    if (assessment.fallbackMode) {
+                        updateStatus(`⚠️ ${assessment.message}<br><small>Détails: ${assessment.errorDetails}</small>`, 'warning');
+                        console.warn('🚨 Fallback mode active:', {
+                            errorType: assessment.errorType,
+                            errorDetails: assessment.errorDetails,
+                            debugInfo: assessment.debugInfo
+                        });
+                    } else {
+                        updateStatus(`✅ ${assessment.message}`, 'success');
+                    }
+                    document.getElementById('test-route-btn').disabled = false;
+                    document.getElementById('full-tour-btn').disabled = false;
+                } else {
+                    updateStatus(`❌ ${assessment.message}`, 'error');
+                }
+                
+                console.log('Assessment result:', assessment);
+            } catch (error) {
+                updateStatus(`❌ Erreur d'évaluation: ${error.message}`, 'error');
+                console.error('Assessment error:', error);
+            }
+        }
+        
+        async function testSimpleRoute() {
+            updateStatus('Calcul d\'une route simple en cours...', 'info', true);
+            
+            try {
+                const start = [testPOIs[0].lat, testPOIs[0].lon];
+                const end = [testPOIs[1].lat, testPOIs[1].lon];
+                
+                const routeData = await routingService.calculateRoute(start, end);
+                
+                if (routeData && routeData.features && routeData.features.length > 0) {
+                    addRouteToMap(routeData, '#27ae60', 5);
+                    
+                    const distance = routeData.features[0].properties.summary.distance;
+                    const duration = routeData.features[0].properties.summary.duration;
+                    const isFallback = routeData.features[0].properties.fallback?.used;
+                    
+                    if (isFallback) {
+                        const fallbackInfo = routeData.features[0].properties.fallback;
+                        updateStatus(`⚠️ Route calculée (FALLBACK): ${(distance / 1000).toFixed(2)}km, ${Math.round(duration / 60)}min<br><small>Raison: ${fallbackInfo.reason}</small>`, 'warning');
+                        console.warn('🚨 Fallback route used:', fallbackInfo);
+                    } else {
+                        updateStatus(`✅ Route calculée: ${(distance / 1000).toFixed(2)}km, ${Math.round(duration / 60)}min`, 'success');
+                    }
+                    
+                    updateRouteInfo({
+                        summary: { distance, duration },
+                        segments: [{ distance, duration }],
+                        fallbackUsed: isFallback
+                    });
+                } else {
+                    updateStatus('❌ Impossible de calculer la route', 'error');
+                }
+            } catch (error) {
+                updateStatus(`❌ Erreur de calcul: ${error.message}`, 'error');
+                console.error('Route calculation error:', error);
+            }
+        }
+        
+        async function testFullTour() {
+            updateStatus('Calcul du tour complet en cours...', 'info', true);
+            
+            try {
+                const result = await routingService.calculateTourRoute(testPOIs);
+                
+                if (result.success) {
+                    // Add each segment with different color
+                    const colors = ['#e74c3c', '#27ae60', '#3498db', '#f39c12'];
+                    let fallbackCount = 0;
+                    
+                    result.segments.forEach((segment, index) => {
+                        const routeData = { features: [segment.route] };
+                        addRouteToMap(routeData, colors[index % colors.length], 4);
+                        
+                        // Count fallback segments
+                        if (segment.route.properties.fallback?.used) {
+                            fallbackCount++;
+                        }
+                    });
+                    
+                    if (fallbackCount > 0) {
+                        updateStatus(`⚠️ Tour complet calculé: ${result.segments.length} segments (${fallbackCount} en mode fallback)<br><small>Vérifiez la console pour plus de détails</small>`, 'warning');
+                        console.warn(`🚨 ${fallbackCount}/${result.segments.length} segments used fallback routing`);
+                        
+                        // Log details of fallback segments
+                        result.segments.forEach((segment, index) => {
+                            if (segment.route.properties.fallback?.used) {
+                                const fallbackInfo = segment.route.properties.fallback;
+                                console.warn(`   Segment ${index + 1} (${segment.start.name} → ${segment.end.name}): ${fallbackInfo.reason}`);
+                            }
+                        });
+                    } else {
+                        updateStatus(`✅ Tour complet calculé: ${result.segments.length} segments`, 'success');
+                    }
+                    
+                    updateRouteInfo({
+                        ...result.route,
+                        fallbackSegments: fallbackCount
+                    });
+                } else {
+                    updateStatus(`❌ Erreur: ${result.error}`, 'error');
+                    console.error('Tour calculation failed:', result);
+                }
+            } catch (error) {
+                updateStatus(`❌ Erreur de calcul: ${error.message}`, 'error');
+                console.error('Tour calculation error:', error);
+            }
+        }
+        
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            initMap();
+            initServices();
+            
+            document.getElementById('assess-btn').addEventListener('click', assessOSMAvailability);
+            document.getElementById('test-route-btn').addEventListener('click', testSimpleRoute);
+            document.getElementById('full-tour-btn').addEventListener('click', testFullTour);
+            document.getElementById('clear-btn').addEventListener('click', clearMap);
+        });
+    </script>
+</body>
+</html>

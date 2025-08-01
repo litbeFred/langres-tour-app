@@ -3,6 +3,7 @@ import { ServiceContainer } from './utils/ServiceContainer.js';
 import { LocationService } from './services/location/index.js';
 import { StorageService } from './services/storage/index.js';
 import { AudioService, CameraService, NotificationService } from './services/media/index.js';
+import { OSMRoutingService, NavigationService } from './services/routing/index.js';
 import { TourManager } from './managers/index.js';
 import { MapComponent } from './components/index.js';
 import tourData from './data/tourData.json';
@@ -67,6 +68,15 @@ class LangresTourApp {
         // Camera service depends on storage
         this.container.register('camera', (container) => 
             new CameraService(container.get('storage')));
+        
+        // Routing services
+        this.container.register('osmRouting', () => new OSMRoutingService());
+        this.container.register('navigation', (container) =>
+            new NavigationService(
+                container.get('osmRouting'),
+                container.get('location'),
+                container.get('audio')
+            ));
         
         // Tour manager depends on multiple services
         this.container.register('tour', (container) => 
@@ -171,7 +181,8 @@ class LangresTourApp {
         this.components.map = new MapComponent(
             'map', 
             this.container.get('location'), 
-            this.container.get('tour')
+            this.container.get('tour'),
+            this.container.get('osmRouting')
         );
         await this.components.map.initialize();
         
