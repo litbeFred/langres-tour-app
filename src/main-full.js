@@ -5,6 +5,196 @@ import tourData from './data/tourData.json';
 
 console.log('🏰 Langres Tour App loading...');
 
+// ========== ROUTING SERVICES ==========
+
+class OSMRoutingService {
+    constructor() {
+        this.baseUrl = 'https://api.openrouteservice.org/v2';
+        this.apiKey = '5b3ce3597851110001cf624841065b7d00c54a47a5bbf6b5a8cd3d1e'; // Public demo key
+        this.cache = new Map();
+        this.maxCacheSize = 50;
+    }
+
+    async assessPedestrianRouteAvailability(coordinates) {
+        try {
+            console.log('🗺️ Assessing OSM pedestrian route availability...');
+            
+            const testStart = coordinates[0];
+            const testEnd = coordinates[1];
+            
+            const testRoute = await this.calculateRoute(testStart, testEnd);
+            
+            if (testRoute && testRoute.features && testRoute.features.length > 0) {
+                const route = testRoute.features[0];
+                const distance = route.properties.summary.distance;
+                const duration = route.properties.summary.duration;
+                
+                return {
+                    available: true,
+                    confidence: 'high',
+                    testDistance: distance,
+                    testDuration: duration,
+                    message: 'OSM pedestrian paths available for routing'
+                };
+            } else {
+                return {
+                    available: false,
+                    confidence: 'low',
+                    message: 'Limited OSM pedestrian data available'
+                };
+            }
+        } catch (error) {
+            console.warn('OSM route assessment failed:', error);
+            return {
+                available: false,
+                confidence: 'unknown',
+                error: error.message,
+                message: 'Unable to assess OSM route availability'
+            };
+        }
+    }
+
+    async calculateRoute(start, end) {
+        const cacheKey = `${start[0]},${start[1]}-${end[0]},${end[1]}`;
+        
+        if (this.cache.has(cacheKey)) {
+            console.log('📍 Using cached route');
+            return this.cache.get(cacheKey);
+        }
+
+        try {
+            const url = `${this.baseUrl}/directions/foot-walking/geojson`;
+            
+            const requestBody = {
+                coordinates: [
+                    [start[1], start[0]],
+                    [end[1], end[0]]
+                ],
+                elevation: false,
+                extra_info: ['waytype', 'surface'],
+                geometry_simplify: false,
+                instructions: true,
+                instructions_format: 'json',
+                language: 'fr',
+                maneuvers: true,
+                preference: 'recommended',
+                units: 'm'
+            };
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': this.apiKey
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const routeData = await response.json();
+            this.addToCache(cacheKey, routeData);
+            
+            console.log('🗺️ OSM route calculated successfully');
+            return routeData;
+            
+        } catch (error) {
+            console.error('OSM routing error:', error);
+            throw error;
+        }
+    }
+
+    async calculateTourRoute(pois) {
+        console.log('🗺️ Calculating complete OSM tour route...');
+        
+        const routeSegments = [];
+        const totalRoute = {
+            type: 'FeatureCollection',
+            features: [],
+            segments: [],
+            instructions: [],
+            summary: {
+                distance: 0,
+                duration: 0
+            }
+        };
+
+        try {
+            for (let i = 0; i < pois.length - 1; i++) {
+                const start = [pois[i].lat, pois[i].lon];
+                const end = [pois[i + 1].lat, pois[i + 1].lon];
+                
+                console.log(`Calculating segment ${i + 1}/${pois.length - 1}: ${pois[i].name} → ${pois[i + 1].name}`);
+                
+                const segmentRoute = await this.calculateRoute(start, end);
+                
+                if (segmentRoute && segmentRoute.features && segmentRoute.features.length > 0) {
+                    const feature = segmentRoute.features[0];
+                    const segment = {
+                        id: i,
+                        start: pois[i],
+                        end: pois[i + 1],
+                        route: feature,
+                        instructions: feature.properties.segments[0].steps || [],
+                        distance: feature.properties.summary.distance,
+                        duration: feature.properties.summary.duration
+                    };
+                    
+                    routeSegments.push(segment);
+                    totalRoute.features.push(feature);
+                    totalRoute.segments.push(segment);
+                    totalRoute.instructions.push(...segment.instructions);
+                    totalRoute.summary.distance += segment.distance;
+                    totalRoute.summary.duration += segment.duration;
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+            
+            console.log(`🗺️ Complete route calculated: ${(totalRoute.summary.distance / 1000).toFixed(2)}km, ${Math.round(totalRoute.summary.duration / 60)}min`);
+            
+            return {
+                success: true,
+                route: totalRoute,
+                segments: routeSegments
+            };
+            
+        } catch (error) {
+            console.error('Tour route calculation failed:', error);
+            return {
+                success: false,
+                error: error.message,
+                partialSegments: routeSegments
+            };
+        }
+    }
+
+    calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371e3;
+        const φ1 = lat1 * Math.PI / 180;
+        const φ2 = lat2 * Math.PI / 180;
+        const Δφ = (lat2 - lat1) * Math.PI / 180;
+        const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+        const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                  Math.cos(φ1) * Math.cos(φ2) *
+                  Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+        return R * c;
+    }
+
+    addToCache(key, data) {
+        if (this.cache.size >= this.maxCacheSize) {
+            const firstKey = this.cache.keys().next().value;
+            this.cache.delete(firstKey);
+        }
+        this.cache.set(key, data);
+    }
+}
+
 // ========== SERVICES (SOLID Single Responsibility) ==========
 
 class LocationService {
@@ -461,17 +651,20 @@ class TourManager {
 // ========== MAP COMPONENT ==========
 
 class MapComponent {
-    constructor(containerId, locationService, tourManager) {
+    constructor(containerId, locationService, tourManager, osmRoutingService = null) {
         this.containerId = containerId;
         this.locationService = locationService;
         this.tourManager = tourManager;
+        this.osmRoutingService = osmRoutingService;
         this.map = null;
         this.userMarker = null;
         this.poiMarkers = new Map();
         this.directRouteLayer = null;
-        this.roadRouteLayer = null;
+        this.osmRouteLayer = null;
         this.showDirectRoute = true;
-        this.showRoadRoute = false;
+        this.showOSMRoute = false;
+        this.osmRouteData = null;
+        this.osmRouteAvailable = false;
     }
 
     async initialize() {
@@ -487,6 +680,11 @@ class MapComponent {
         this.addPOIMarkers();
         this.drawHikingRoutes();
         this.addRouteControls();
+
+        // Assess OSM route availability if service is available
+        if (this.osmRoutingService) {
+            await this.assessOSMRouteAvailability();
+        }
 
         this.locationService.startWatching((position) => {
             this.updateUserLocation(position.coords.latitude, position.coords.longitude);
@@ -952,18 +1150,6 @@ class MapComponent {
         }
     }
 
-    toggleRoadRoute() {
-        if (this.roadRouteLayer) {
-            if (this.showRoadRoute) {
-                this.map.removeLayer(this.roadRouteLayer);
-                this.showRoadRoute = false;
-            } else {
-                this.map.addLayer(this.roadRouteLayer);
-                this.showRoadRoute = true;
-            }
-        }
-    }
-
     addRouteControls() {
         const routeControl = L.control({ position: 'topright' });
         
@@ -976,8 +1162,15 @@ class MapComponent {
                         <input type="checkbox" id="direct-route-toggle" ${this.showDirectRoute ? 'checked' : ''}>
                         <span>🔴 Ligne directe</span>
                     </label>
-                    <div class="route-disabled">
-                        <span>🟢 Parcours piéton (bientôt)</span>
+                    <label class="route-checkbox" id="osm-route-container" style="display: none;">
+                        <input type="checkbox" id="osm-route-toggle" ${this.showOSMRoute ? 'checked' : ''}>
+                        <span>🟢 Parcours piéton</span>
+                    </label>
+                    <button id="calculate-osm-route" class="route-button" style="display: none;">
+                        🧭 Calculer itinéraire OSM
+                    </button>
+                    <div id="osm-route-status" class="route-status">
+                        <span>🟢 Évaluation en cours...</span>
                     </div>
                 </div>
             `;
@@ -994,11 +1187,167 @@ class MapComponent {
         // Add event listeners after control is added
         setTimeout(() => {
             const directToggle = document.getElementById('direct-route-toggle');
-            
             if (directToggle) {
                 directToggle.addEventListener('change', () => this.toggleDirectRoute());
             }
+            
+            const osmToggle = document.getElementById('osm-route-toggle');
+            if (osmToggle) {
+                osmToggle.addEventListener('change', () => this.toggleOSMRoute());
+            }
+            
+            const calculateButton = document.getElementById('calculate-osm-route');
+            if (calculateButton) {
+                calculateButton.addEventListener('click', () => this.calculateOSMRoute());
+            }
         }, 100);
+    }
+
+    toggleOSMRoute() {
+        if (this.osmRouteLayer) {
+            if (this.showOSMRoute) {
+                this.map.removeLayer(this.osmRouteLayer);
+                this.showOSMRoute = false;
+            } else {
+                this.map.addLayer(this.osmRouteLayer);
+                this.showOSMRoute = true;
+            }
+        }
+    }
+
+    async assessOSMRouteAvailability() {
+        if (!this.osmRoutingService) return;
+
+        try {
+            const pois = this.tourManager.getAllPOIs();
+            const coordinates = pois.slice(0, 3).map(poi => [poi.lat, poi.lon]); // Test with first 3 POIs
+            
+            console.log('🗺️ Assessing OSM route availability...');
+            const assessment = await this.osmRoutingService.assessPedestrianRouteAvailability(coordinates);
+            
+            this.osmRouteAvailable = assessment.available;
+            this.updateOSMRouteStatus(assessment);
+            
+        } catch (error) {
+            console.warn('OSM route assessment failed:', error);
+            this.updateOSMRouteStatus({
+                available: false,
+                message: 'Évaluation impossible'
+            });
+        }
+    }
+
+    updateOSMRouteStatus(assessment) {
+        const statusElement = document.getElementById('osm-route-status');
+        const containerElement = document.getElementById('osm-route-container');
+        const buttonElement = document.getElementById('calculate-osm-route');
+        
+        if (statusElement) {
+            if (assessment.available) {
+                statusElement.innerHTML = '<span style="color: #27ae60;">✅ Parcours OSM disponible</span>';
+                if (containerElement) containerElement.style.display = 'block';
+                if (buttonElement) buttonElement.style.display = 'block';
+            } else {
+                statusElement.innerHTML = `<span style="color: #f39c12;">⚠️ ${assessment.message}</span>`;
+                if (containerElement) containerElement.style.display = 'none';
+                if (buttonElement) buttonElement.style.display = 'none';
+            }
+        }
+    }
+
+    async calculateOSMRoute() {
+        if (!this.osmRoutingService || !this.osmRouteAvailable) {
+            console.warn('OSM routing not available');
+            return;
+        }
+
+        try {
+            const statusElement = document.getElementById('osm-route-status');
+            if (statusElement) {
+                statusElement.innerHTML = '<span style="color: #3498db;">🔄 Calcul en cours...</span>';
+            }
+
+            const pois = this.tourManager.getAllPOIs();
+            console.log('🗺️ Calculating OSM tour route...');
+            
+            const result = await this.osmRoutingService.calculateTourRoute(pois);
+            
+            if (result.success) {
+                this.osmRouteData = result;
+                this.drawOSMRoute(result);
+                
+                if (statusElement) {
+                    const distance = (result.route.summary.distance / 1000).toFixed(2);
+                    const duration = Math.round(result.route.summary.duration / 60);
+                    statusElement.innerHTML = `<span style="color: #27ae60;">✅ ${distance}km, ${duration}min</span>`;
+                }
+                
+                console.log('🗺️ OSM route calculated successfully');
+            } else {
+                throw new Error(result.error || 'Route calculation failed');
+            }
+            
+        } catch (error) {
+            console.error('OSM route calculation failed:', error);
+            const statusElement = document.getElementById('osm-route-status');
+            if (statusElement) {
+                statusElement.innerHTML = '<span style="color: #e74c3c;">❌ Calcul échoué</span>';
+            }
+        }
+    }
+
+    drawOSMRoute(routeResult) {
+        // Remove existing OSM route
+        if (this.osmRouteLayer) {
+            this.map.removeLayer(this.osmRouteLayer);
+        }
+
+        // Create a layer group for all route segments
+        this.osmRouteLayer = L.layerGroup();
+
+        const colors = ['#27ae60', '#3498db', '#9b59b6', '#e67e22', '#1abc9c'];
+        
+        routeResult.segments.forEach((segment, index) => {
+            const coordinates = segment.route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+            const color = colors[index % colors.length];
+            
+            const segmentLayer = L.polyline(coordinates, {
+                color: color,
+                weight: 5,
+                opacity: 0.8,
+                lineCap: 'round',
+                lineJoin: 'round'
+            });
+
+            // Add popup with segment information
+            segmentLayer.bindPopup(`
+                <div style="text-align: center;">
+                    <h4>🟢 Segment ${index + 1}</h4>
+                    <p><strong>De:</strong> ${segment.start.name}</p>
+                    <p><strong>Vers:</strong> ${segment.end.name}</p>
+                    <p><strong>Distance:</strong> ${(segment.distance / 1000).toFixed(2)} km</p>
+                    <p><strong>Durée:</strong> ${Math.round(segment.duration / 60)} min</p>
+                    <p><small>Parcours piéton OSM</small></p>
+                </div>
+            `);
+
+            this.osmRouteLayer.addLayer(segmentLayer);
+        });
+
+        // Add to map if OSM route is enabled
+        if (this.showOSMRoute) {
+            this.osmRouteLayer.addTo(this.map);
+        }
+
+        // Enable the toggle checkbox
+        const osmToggle = document.getElementById('osm-route-toggle');
+        if (osmToggle) {
+            osmToggle.disabled = false;
+        }
+    }
+
+    getOSMRouteData() {
+        return this.osmRouteData;
     }
 }
 
@@ -1010,7 +1359,8 @@ class LangresTourApp {
             location: new LocationService(),
             storage: new StorageService(),
             audio: new AudioService(),
-            notification: new NotificationService()
+            notification: new NotificationService(),
+            osmRouting: new OSMRoutingService()
         };
         
         this.components = {};
@@ -1032,7 +1382,7 @@ class LangresTourApp {
 
         this.components.camera = new CameraService(this.services.storage);
 
-        this.components.map = new MapComponent('map', this.services.location, this.components.tour);
+        this.components.map = new MapComponent('map', this.services.location, this.components.tour, this.services.osmRouting);
         await this.components.map.initialize();
         
         this.setupTourCallbacks();
