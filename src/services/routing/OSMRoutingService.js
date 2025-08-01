@@ -5,22 +5,39 @@
  */
 export class OSMRoutingService {
     constructor() {
-        // Use public OpenRouteService API (limited requests, but good for testing)
-        // For production, consider getting your own API key
-        this.baseUrl = 'https://api.openrouteservice.org/v2';
-        this.apiKey = '5b3ce3597851110001cf624841065b7d00c54a47a5bbf6b5a8cd3d1e'; // Public demo key
+        // Use OSRM (Open Source Routing Machine) - CORS-enabled, no API key required
+        this.osrmBaseUrl = 'https://router.project-osrm.org/route/v1/foot';
+        this.osrmTableUrl = 'https://router.project-osrm.org/table/v1/foot';
         this.cache = new Map();
-        this.maxCacheSize = 50;
+        this.maxCacheSize = 100;
+        this.lastRequestTime = 0;
+        this.requestDelay = 1000; // 1 second between requests to respect rate limits
     }
 
     /**
-     * Assess if pedestrian routes are available in OSM for the given area
+     * Rate limiting to be respectful to the public OSRM server
+     */
+    async respectRateLimit() {
+        const now = Date.now();
+        const timeSinceLastRequest = now - this.lastRequestTime;
+        
+        if (timeSinceLastRequest < this.requestDelay) {
+            const waitTime = this.requestDelay - timeSinceLastRequest;
+            console.log(`⏱️ Rate limiting: waiting ${waitTime}ms`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+        
+        this.lastRequestTime = Date.now();
+    }
+
+    /**
+     * Assess if OSRM routing is available for the given area
      * @param {Array} coordinates - Array of [lat, lon] coordinates
      * @returns {Promise<Object>} Assessment result with availability status
      */
     async assessPedestrianRouteAvailability(coordinates) {
         try {
-            console.log('🗺️ Assessing OSM pedestrian route availability...');
+            console.log('� Testing OSRM routing availability...');
             
             // Test route calculation between first two points
             const testStart = coordinates[0];
@@ -28,7 +45,10 @@ export class OSMRoutingService {
             
             const testRoute = await this.calculateRoute(testStart, testEnd);
             
-            if (testRoute && testRoute.features && testRoute.features.length > 0) {
+            // Check if we got a real OSRM response or fallback
+            const isRealRoute = !testRoute.features[0].properties.fallback;
+            
+            if (isRealRoute) {
                 const route = testRoute.features[0];
                 const distance = route.properties.summary.distance;
                 const duration = route.properties.summary.duration;
@@ -38,31 +58,71 @@ export class OSMRoutingService {
                     confidence: 'high',
                     testDistance: distance,
                     testDuration: duration,
-                    message: 'OSM pedestrian paths available for routing'
+                    message: '✅ OSRM routing disponible',
+                    provider: 'OSRM',
+                    debugInfo: {
+                        endpoint: this.osrmBaseUrl,
+                        timestamp: new Date().toISOString()
+                    }
                 };
             } else {
                 return {
                     available: false,
                     confidence: 'low',
-                    message: 'Limited OSM pedestrian data available'
+                    message: '⚠️ OSRM indisponible - mode fallback actif',
+                    fallbackReason: testRoute.features[0].properties.fallback.reason
                 };
             }
         } catch (error) {
-            console.warn('OSM route assessment failed, using fallback assessment:', error);
+            console.warn('🚨 OSRM route assessment failed, using fallback assessment:', error);
             
-            // Provide fallback assessment
+            // Determine the specific error type for better debugging
+            let errorType = 'unknown';
+            let errorDetails = error.message || 'Unknown error';
+            
+            if (error.message && error.message.includes('CORS')) {
+                errorType = 'cors';
+                errorDetails = 'CORS policy blocking external API access';
+            } else if (error.message && error.message.includes('403')) {
+                errorType = 'forbidden';
+                errorDetails = 'API access forbidden (403) - possibly rate limited';
+            } else if (error.message && error.message.includes('Network')) {
+                errorType = 'network';
+                errorDetails = 'Network connectivity issue';
+            } else if (error.name === 'TypeError') {
+                errorType = 'fetch';
+                errorDetails = 'Fetch API error - possibly network issue';
+            }
+            
+            // Log detailed error for debugging
+            console.error('🔍 OSRM API Error Details:', {
+                type: errorType,
+                message: errorDetails,
+                originalError: error,
+                apiEndpoint: this.osrmBaseUrl,
+                timestamp: new Date().toISOString()
+            });
+            
+            // Provide fallback assessment with error context
             return {
                 available: true,
                 confidence: 'medium',
                 fallbackMode: true,
-                message: 'Routing piéton disponible en mode local (fallback)',
-                note: 'API OSM indisponible - utilisation du routage direct avec waypoints'
+                errorType: errorType,
+                errorDetails: errorDetails,
+                message: `⚠️ Mode fallback activé (${errorType})`,
+                note: `OSRM indisponible: ${errorDetails}`,
+                debugInfo: {
+                    originalError: error.message,
+                    apiUrl: this.osrmBaseUrl,
+                    timestamp: new Date().toISOString()
+                }
             };
         }
     }
 
     /**
-     * Calculate pedestrian route between two points
+     * Calculate pedestrian route between two points using OSRM
      * @param {Array} start - [latitude, longitude]
      * @param {Array} end - [latitude, longitude]
      * @returns {Promise<Object>} GeoJSON route data
@@ -72,63 +132,235 @@ export class OSMRoutingService {
         
         // Check cache first
         if (this.cache.has(cacheKey)) {
-            console.log('📍 Using cached route');
+            console.log('� Using cached OSRM route');
             return this.cache.get(cacheKey);
         }
 
+        // Rate limiting
+        await this.respectRateLimit();
+
         try {
-            const url = `${this.baseUrl}/directions/foot-walking/geojson`;
+            console.log('🚀 Calculating route with OSRM...');
+            console.log(`📍 From: ${start[0]}, ${start[1]} → To: ${end[0]}, ${end[1]}`);
             
-            const requestBody = {
-                coordinates: [
-                    [start[1], start[0]], // OpenRouteService expects [lon, lat]
-                    [end[1], end[0]]
-                ],
-                elevation: false,
-                extra_info: ['waytype', 'surface'],
-                geometry_simplify: false,
-                instructions: true,
-                instructions_format: 'json',
-                language: 'fr',
-                maneuvers: true,
-                preference: 'recommended',
-                units: 'm'
-            };
+            // OSRM expects coordinates as [longitude, latitude]
+            const startCoord = [start[1], start[0]]; // lon, lat
+            const endCoord = [end[1], end[0]];       // lon, lat
+            
+            const url = `${this.osrmBaseUrl}/${startCoord.join(',')};${endCoord.join(',')}?overview=full&geometries=geojson&steps=true&annotations=true`;
+            
+            console.log('🌐 OSRM URL:', url);
 
             const response = await fetch(url, {
-                method: 'POST',
+                method: 'GET',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': this.apiKey
-                },
-                body: JSON.stringify(requestBody)
+                    'Accept': 'application/json',
+                    'User-Agent': 'Langres-Tour-App/1.0'
+                }
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                throw new Error(`OSRM API error: ${response.status} ${response.statusText}`);
             }
 
             const routeData = await response.json();
+            console.log('✅ OSRM response received');
             
-            // Cache the result
-            this.addToCache(cacheKey, routeData);
-            
-            console.log('🗺️ OSM route calculated successfully');
-            return routeData;
+            if (routeData.routes && routeData.routes.length > 0) {
+                const convertedRoute = this.convertOSRMToGeoJSON(routeData.routes[0], start, end);
+                
+                // Cache the result
+                this.addToCache(cacheKey, convertedRoute);
+                
+                console.log('🗺️ OSRM route converted successfully');
+                return convertedRoute;
+            } else {
+                throw new Error('No routes found in OSRM response');
+            }
             
         } catch (error) {
-            console.warn('OSM routing API unavailable, falling back to direct route:', error);
-            return this.generateFallbackRoute(start, end);
+            // Enhanced error logging and categorization
+            let errorType = 'unknown';
+            let errorDetails = error.message || 'Unknown error';
+            
+            if (error.message && error.message.includes('CORS')) {
+                errorType = 'cors';
+                errorDetails = 'CORS policy blocking external API access';
+                console.error('🚨 CORS Error: External API calls blocked by browser policy');
+            } else if (error.message && (error.message.includes('403') || error.message.includes('Forbidden'))) {
+                errorType = 'forbidden';
+                errorDetails = 'API access forbidden - possibly rate limited';
+                console.error('🚨 API Forbidden: Rate limit or access restriction');
+            } else if (error.message && error.message.includes('404')) {
+                errorType = 'not_found';
+                errorDetails = 'OSRM endpoint not found';
+                console.error('🚨 API Not Found: OSRM endpoint may be unavailable');
+            } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                errorType = 'fetch';
+                errorDetails = 'Network request failed - possibly connectivity issue';
+                console.error('🚨 Fetch Error: Network request failed');
+            } else if (error.message && error.message.includes('HTTP')) {
+                errorType = 'http';
+                errorDetails = `HTTP error: ${error.message}`;
+                console.error('🚨 HTTP Error:', error.message);
+            }
+            
+            console.warn(`🔄 OSRM routing API unavailable (${errorType}), falling back to direct route:`, errorDetails);
+            console.warn('🔍 Full error details:', {
+                type: errorType,
+                message: errorDetails,
+                originalError: error,
+                apiUrl: this.osrmBaseUrl,
+                timestamp: new Date().toISOString()
+            });
+            
+            return this.generateFallbackRoute(start, end, { errorType, errorDetails });
         }
     }
 
     /**
-     * Calculate complete tour route through all POIs
+     * Convert OSRM response to our standard GeoJSON format
+     * @param {Object} osrmRoute - OSRM route object
+     * @param {Array} start - [latitude, longitude]
+     * @param {Array} end - [latitude, longitude]
+     * @returns {Object} GeoJSON route data compatible with our system
+     */
+    convertOSRMToGeoJSON(osrmRoute, start, end) {
+        const distance = Math.round(osrmRoute.distance); // meters
+        const duration = Math.round(osrmRoute.duration); // seconds
+        const geometry = osrmRoute.geometry;
+        
+        // Convert OSRM steps to French navigation instructions
+        const instructions = this.convertOSRMStepsToInstructions(osrmRoute.legs[0].steps);
+        
+        return {
+            type: 'FeatureCollection',
+            features: [{
+                type: 'Feature',
+                geometry: geometry,
+                properties: {
+                    summary: {
+                        distance: distance,
+                        duration: duration
+                    },
+                    segments: [{
+                        distance: distance,
+                        duration: duration,
+                        steps: instructions
+                    }],
+                    way_points: [0, geometry.coordinates.length - 1],
+                    provider: 'OSRM',
+                    fallback: null // This is a real API response
+                }
+            }],
+            bbox: osrmRoute.bbox || [
+                Math.min(start[1], end[1]),
+                Math.min(start[0], end[0]),
+                Math.max(start[1], end[1]),
+                Math.max(start[0], end[0])
+            ],
+            metadata: {
+                attribution: 'Route via OSRM (Open Source Routing Machine)',
+                service: 'OSRM',
+                timestamp: Date.now()
+            }
+        };
+    }
+
+    /**
+     * Convert OSRM navigation steps to French instructions
+     * @param {Array} steps - OSRM step objects
+     * @returns {Array} Formatted navigation instructions
+     */
+    convertOSRMStepsToInstructions(steps) {
+        return steps.map((step, index) => {
+            const maneuver = step.maneuver;
+            let instruction = '';
+            
+            // Handle different maneuver types with French instructions
+            switch (maneuver.type) {
+                case 'depart':
+                    instruction = 'Commencez votre trajet';
+                    break;
+                case 'arrive':
+                    instruction = 'Arrivée à destination';
+                    break;
+                case 'turn':
+                    instruction = this.getTurnInstruction(maneuver.modifier);
+                    break;
+                case 'continue':
+                    instruction = 'Continuez tout droit';
+                    break;
+                case 'merge':
+                    instruction = 'Continuez en restant sur la voie';
+                    break;
+                case 'ramp':
+                    instruction = 'Prenez la bretelle';
+                    break;
+                case 'roundabout':
+                    instruction = 'Entrez dans le rond-point';
+                    break;
+                case 'exit roundabout':
+                    instruction = 'Sortez du rond-point';
+                    break;
+                case 'new name':
+                    instruction = 'Continuez sur';
+                    break;
+                default:
+                    instruction = 'Continuez';
+            }
+            
+            // Add street name if available
+            if (step.name && step.name !== '' && step.name !== 'undefined') {
+                instruction += ` sur ${step.name}`;
+            }
+            
+            // Add distance information for longer segments
+            if (step.distance > 50) {
+                const distanceText = step.distance > 1000 
+                    ? `${(step.distance / 1000).toFixed(1)} km`
+                    : `${Math.round(step.distance)} m`;
+                instruction += ` pendant ${distanceText}`;
+            }
+            
+            return {
+                distance: Math.round(step.distance),
+                duration: Math.round(step.duration),
+                type: maneuver.type,
+                instruction: instruction,
+                name: step.name || 'Route sans nom',
+                way_points: [step.intersections?.[0]?.location || maneuver.location],
+                location: maneuver.location
+            };
+        });
+    }
+
+    /**
+     * Get French turn instruction based on OSRM modifier
+     * @param {String} modifier - OSRM turn modifier
+     * @returns {String} French turn instruction
+     */
+    getTurnInstruction(modifier) {
+        const turnInstructions = {
+            'straight': 'Continuez tout droit',
+            'slight left': 'Tournez légèrement à gauche',
+            'left': 'Tournez à gauche',
+            'sharp left': 'Tournez fortement à gauche',
+            'slight right': 'Tournez légèrement à droite',
+            'right': 'Tournez à droite',
+            'sharp right': 'Tournez fortement à droite',
+            'uturn': 'Faites demi-tour'
+        };
+        
+        return turnInstructions[modifier] || `Tournez ${modifier}`;
+    }
+    /**
+     * Calculate complete tour route through all POIs using OSRM
      * @param {Array} pois - Array of POI objects with lat, lon properties
      * @returns {Promise<Object>} Complete route with segments
      */
     async calculateTourRoute(pois) {
-        console.log('🗺️ Calculating complete OSM tour route...');
+        console.log(`🗺️ Calculating complete OSRM tour route through ${pois.length} POIs...`);
         
         const routeSegments = [];
         const totalRoute = {
@@ -142,13 +374,15 @@ export class OSMRoutingService {
             }
         };
 
+        let fallbackCount = 0;
+
         try {
             // Calculate route between consecutive POIs
             for (let i = 0; i < pois.length - 1; i++) {
                 const start = [pois[i].lat, pois[i].lon];
                 const end = [pois[i + 1].lat, pois[i + 1].lon];
                 
-                console.log(`Calculating segment ${i + 1}/${pois.length - 1}: ${pois[i].name} → ${pois[i + 1].name}`);
+                console.log(`📍 Calculating segment ${i + 1}/${pois.length - 1}: ${pois[i].name} → ${pois[i + 1].name}`);
                 
                 const segmentRoute = await this.calculateRoute(start, end);
                 
@@ -164,6 +398,12 @@ export class OSMRoutingService {
                         duration: feature.properties.summary.duration
                     };
                     
+                    // Check if this segment used fallback
+                    if (feature.properties.fallback) {
+                        fallbackCount++;
+                        console.warn(`   ⚠️ Segment ${i + 1} used fallback: ${feature.properties.fallback.reason}`);
+                    }
+                    
                     routeSegments.push(segment);
                     totalRoute.features.push(feature);
                     totalRoute.segments.push(segment);
@@ -172,24 +412,34 @@ export class OSMRoutingService {
                     totalRoute.summary.duration += segment.duration;
                 }
                 
-                // Small delay to avoid rate limiting
-                await new Promise(resolve => setTimeout(resolve, 100));
+                // Small delay to avoid overwhelming the OSRM server
+                await new Promise(resolve => setTimeout(resolve, 200));
             }
             
-            console.log(`🗺️ Complete route calculated: ${(totalRoute.summary.distance / 1000).toFixed(2)}km, ${Math.round(totalRoute.summary.duration / 60)}min`);
+            const totalDistanceKm = (totalRoute.summary.distance / 1000).toFixed(2);
+            const totalDurationMin = Math.round(totalRoute.summary.duration / 60);
+            
+            console.log(`🗺️ Complete OSRM route calculated: ${totalDistanceKm}km, ${totalDurationMin}min`);
+            
+            if (fallbackCount > 0) {
+                console.warn(`⚠️ ${fallbackCount}/${routeSegments.length} segments used fallback routing`);
+            }
             
             return {
                 success: true,
                 route: totalRoute,
-                segments: routeSegments
+                segments: routeSegments,
+                fallbackSegments: fallbackCount,
+                provider: 'OSRM'
             };
             
         } catch (error) {
-            console.error('Tour route calculation failed:', error);
+            console.error('OSRM tour route calculation failed:', error);
             return {
                 success: false,
                 error: error.message,
-                partialSegments: routeSegments
+                partialSegments: routeSegments,
+                fallbackSegments: fallbackCount
             };
         }
     }
@@ -324,10 +574,16 @@ export class OSMRoutingService {
      * Creates a simple direct route with pedestrian-like waypoints
      * @param {Array} start - [latitude, longitude]
      * @param {Array} end - [latitude, longitude]
+     * @param {Object} errorContext - Optional error context for debugging
      * @returns {Object} Fallback route data in GeoJSON format
      */
-    generateFallbackRoute(start, end) {
-        console.log('🗺️ Generating fallback pedestrian route...');
+    generateFallbackRoute(start, end, errorContext = null) {
+        const fallbackReason = errorContext ? 
+            `OSRM API Error (${errorContext.errorType}): ${errorContext.errorDetails}` : 
+            'OSRM API unavailable';
+            
+        console.log('� Generating fallback pedestrian route...');
+        console.log('🔍 Fallback reason:', fallbackReason);
         
         const distance = this.calculateDistance(start[0], start[1], end[0], end[1]);
         const estimatedDuration = Math.round(distance / 1.4); // Walking speed ~1.4 m/s
@@ -352,7 +608,15 @@ export class OSMRoutingService {
                         duration: estimatedDuration,
                         steps: instructions
                     }],
-                    way_points: [0, waypoints.length - 1]
+                    way_points: [0, waypoints.length - 1],
+                    // Add fallback metadata for debugging
+                    fallback: {
+                        used: true,
+                        reason: fallbackReason,
+                        errorContext: errorContext,
+                        timestamp: new Date().toISOString(),
+                        service: 'local-fallback'
+                    }
                 },
                 geometry: {
                     type: 'LineString',
@@ -368,7 +632,9 @@ export class OSMRoutingService {
             metadata: {
                 attribution: 'Fallback route - Direct pedestrian path',
                 service: 'local-fallback',
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                fallbackReason: fallbackReason,
+                errorContext: errorContext
             }
         };
         
@@ -376,7 +642,9 @@ export class OSMRoutingService {
         const cacheKey = `${start[0]},${start[1]}-${end[0]},${end[1]}`;
         this.addToCache(cacheKey, fallbackRoute);
         
-        console.log(`🗺️ Fallback route generated: ${(distance / 1000).toFixed(2)}km, ${Math.round(estimatedDuration / 60)}min`);
+        console.log(`� Fallback route generated: ${(distance / 1000).toFixed(2)}km, ${Math.round(estimatedDuration / 60)}min`);
+        console.log('⚠️ USING FALLBACK MODE - OSM API not available');
+        
         return fallbackRoute;
     }
 

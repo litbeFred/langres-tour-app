@@ -156,7 +156,7 @@ export class MapComponent {
                         <span>🔴 Ligne directe</span>
                     </label>
                     <label class="route-checkbox" id="osm-route-container" style="display: none;">
-                        <input type="checkbox" id="osm-route-toggle" ${this.showOSMRoute ? 'checked' : ''}>
+                        <input type="checkbox" id="osm-route-toggle" disabled>
                         <span>🟢 Parcours piéton</span>
                     </label>
                     <button id="calculate-osm-route" class="route-button" style="display: none;">
@@ -199,24 +199,46 @@ export class MapComponent {
     // Route Toggle Methods (Single Responsibility)
     toggleDirectRoute() {
         if (this.directRouteLayer) {
+            const directToggle = document.getElementById('direct-route-toggle');
+            
             if (this.showDirectRoute) {
+                // Currently visible, hide it
                 this.map.removeLayer(this.directRouteLayer);
                 this.showDirectRoute = false;
+                console.log('🔴 Direct route hidden');
             } else {
+                // Currently hidden, show it
                 this.map.addLayer(this.directRouteLayer);
                 this.showDirectRoute = true;
+                console.log('🔴 Direct route displayed');
+            }
+            
+            // Update checkbox state to match visibility
+            if (directToggle) {
+                directToggle.checked = this.showDirectRoute;
             }
         }
     }
 
     toggleOSMRoute() {
         if (this.osmRouteLayer) {
+            const osmToggle = document.getElementById('osm-route-toggle');
+            
             if (this.showOSMRoute) {
+                // Currently visible, hide it
                 this.map.removeLayer(this.osmRouteLayer);
                 this.showOSMRoute = false;
+                console.log('🟢 OSM route hidden');
             } else {
+                // Currently hidden, show it
                 this.map.addLayer(this.osmRouteLayer);
                 this.showOSMRoute = true;
+                console.log('🟢 OSM route displayed');
+            }
+            
+            // Update checkbox state to match visibility
+            if (osmToggle) {
+                osmToggle.checked = this.showOSMRoute;
             }
         }
     }
@@ -251,11 +273,21 @@ export class MapComponent {
         
         if (statusElement) {
             if (assessment.available) {
-                statusElement.innerHTML = '<span style="color: #27ae60;">✅ Parcours OSM disponible</span>';
+                if (assessment.fallbackMode) {
+                    // Show fallback mode with warning
+                    const errorInfo = assessment.errorType ? ` (${assessment.errorType})` : '';
+                    statusElement.innerHTML = `
+                        <span style="color: #f39c12;">⚠️ Mode Fallback Actif${errorInfo}</span>
+                        <br><small style="color: #7f8c8d;">${assessment.errorDetails || 'API OSM indisponible'}</small>
+                    `;
+                } else {
+                    statusElement.innerHTML = '<span style="color: #27ae60;">✅ API OSM disponible</span>';
+                }
+                
                 if (containerElement) containerElement.style.display = 'block';
                 if (buttonElement) buttonElement.style.display = 'block';
             } else {
-                statusElement.innerHTML = `<span style="color: #f39c12;">⚠️ ${assessment.message}</span>`;
+                statusElement.innerHTML = `<span style="color: #e74c3c;">❌ ${assessment.message}</span>`;
                 if (containerElement) containerElement.style.display = 'none';
                 if (buttonElement) buttonElement.style.display = 'none';
             }
@@ -265,6 +297,12 @@ export class MapComponent {
     async calculateOSMRoute() {
         if (!this.osmRoutingService || !this.osmRouteAvailable) {
             console.warn('OSM routing not available');
+            return;
+        }
+
+        // Check if route is already calculated
+        if (this.osmRouteData && this.osmRouteLayer) {
+            console.log('🟢 OSM route already calculated, no need to recalculate');
             return;
         }
 
@@ -283,13 +321,32 @@ export class MapComponent {
                 this.osmRouteData = result;
                 this.drawOSMRoute(result);
                 
+                // Check if any routes used fallback mode
+                const fallbackSegments = result.segments.filter(segment => 
+                    segment.route?.properties?.fallback?.used);
+                
                 if (statusElement) {
                     const distance = (result.route.summary.distance / 1000).toFixed(2);
                     const duration = Math.round(result.route.summary.duration / 60);
-                    statusElement.innerHTML = `<span style="color: #27ae60;">✅ ${distance}km, ${duration}min</span>`;
+                    
+                    if (fallbackSegments.length > 0) {
+                        statusElement.innerHTML = `
+                            <span style="color: #f39c12;">⚠️ ${distance}km, ${duration}min (Fallback: ${fallbackSegments.length}/${result.segments.length})</span>
+                            <br><small style="color: #7f8c8d;">Certains segments utilisent le mode fallback</small>
+                        `;
+                    } else {
+                        statusElement.innerHTML = `<span style="color: #27ae60;">✅ ${distance}km, ${duration}min</span>`;
+                    }
                 }
                 
                 console.log('🗺️ OSM route calculated successfully');
+                if (fallbackSegments.length > 0) {
+                    console.warn(`⚠️ ${fallbackSegments.length} segments used fallback routing`);
+                    fallbackSegments.forEach((segment, index) => {
+                        const fallbackInfo = segment.route.properties.fallback;
+                        console.warn(`   Segment ${segment.id + 1}: ${fallbackInfo.reason}`);
+                    });
+                }
             } else {
                 throw new Error(result.error || 'Route calculation failed');
             }
@@ -341,16 +398,24 @@ export class MapComponent {
             this.osmRouteLayer.addLayer(segmentLayer);
         });
 
-        // Add to map if OSM route is enabled
-        if (this.showOSMRoute) {
-            this.osmRouteLayer.addTo(this.map);
-        }
+        // Add to map and show by default after calculation
+        this.showOSMRoute = true;
+        this.osmRouteLayer.addTo(this.map);
 
-        // Enable the toggle checkbox
+        // Enable and check the toggle checkbox
         const osmToggle = document.getElementById('osm-route-toggle');
         if (osmToggle) {
             osmToggle.disabled = false;
+            osmToggle.checked = true; // Route is visible by default
         }
+        
+        // Hide the calculate button since route is now calculated
+        const calculateButton = document.getElementById('calculate-osm-route');
+        if (calculateButton) {
+            calculateButton.style.display = 'none';
+        }
+        
+        console.log('🟢 OSM route displayed and controls updated');
     }
 
     // Get OSM route data for navigation

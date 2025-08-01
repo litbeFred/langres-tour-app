@@ -193,11 +193,22 @@
             const routeDetails = document.getElementById('route-details');
             
             if (routeData) {
-                routeDetails.innerHTML = `
+                let detailsHTML = `
                     <p><strong>Distance:</strong> ${(routeData.summary.distance / 1000).toFixed(2)} km</p>
                     <p><strong>Durée:</strong> ${Math.round(routeData.summary.duration / 60)} min</p>
                     <p><strong>Segments:</strong> ${routeData.segments ? routeData.segments.length : 1}</p>
                 `;
+                
+                // Add fallback information if present
+                if (routeData.fallbackUsed) {
+                    detailsHTML += '<p><strong style="color: #f39c12;">⚠️ Mode Fallback:</strong> Utilisé</p>';
+                } else if (routeData.fallbackSegments > 0) {
+                    detailsHTML += `<p><strong style="color: #f39c12;">⚠️ Segments Fallback:</strong> ${routeData.fallbackSegments}/${routeData.segments.length}</p>`;
+                } else {
+                    detailsHTML += '<p><strong style="color: #27ae60;">✅ API OSM:</strong> Utilisé</p>';
+                }
+                
+                routeDetails.innerHTML = detailsHTML;
                 routeInfo.style.display = 'block';
             } else {
                 routeInfo.style.display = 'none';
@@ -236,12 +247,23 @@
                 const coordinates = testPOIs.map(poi => [poi.lat, poi.lon]);
                 const assessment = await routingService.assessPedestrianRouteAvailability(coordinates);
                 
+                console.log('🔍 Detailed assessment result:', assessment);
+                
                 if (assessment.available) {
-                    updateStatus(`✅ ${assessment.message}`, 'success');
+                    if (assessment.fallbackMode) {
+                        updateStatus(`⚠️ ${assessment.message}<br><small>Détails: ${assessment.errorDetails}</small>`, 'warning');
+                        console.warn('🚨 Fallback mode active:', {
+                            errorType: assessment.errorType,
+                            errorDetails: assessment.errorDetails,
+                            debugInfo: assessment.debugInfo
+                        });
+                    } else {
+                        updateStatus(`✅ ${assessment.message}`, 'success');
+                    }
                     document.getElementById('test-route-btn').disabled = false;
                     document.getElementById('full-tour-btn').disabled = false;
                 } else {
-                    updateStatus(`⚠️ ${assessment.message}`, 'warning');
+                    updateStatus(`❌ ${assessment.message}`, 'error');
                 }
                 
                 console.log('Assessment result:', assessment);
@@ -265,11 +287,20 @@
                     
                     const distance = routeData.features[0].properties.summary.distance;
                     const duration = routeData.features[0].properties.summary.duration;
+                    const isFallback = routeData.features[0].properties.fallback?.used;
                     
-                    updateStatus(`✅ Route calculée: ${(distance / 1000).toFixed(2)}km, ${Math.round(duration / 60)}min`, 'success');
+                    if (isFallback) {
+                        const fallbackInfo = routeData.features[0].properties.fallback;
+                        updateStatus(`⚠️ Route calculée (FALLBACK): ${(distance / 1000).toFixed(2)}km, ${Math.round(duration / 60)}min<br><small>Raison: ${fallbackInfo.reason}</small>`, 'warning');
+                        console.warn('🚨 Fallback route used:', fallbackInfo);
+                    } else {
+                        updateStatus(`✅ Route calculée: ${(distance / 1000).toFixed(2)}km, ${Math.round(duration / 60)}min`, 'success');
+                    }
+                    
                     updateRouteInfo({
                         summary: { distance, duration },
-                        segments: [{ distance, duration }]
+                        segments: [{ distance, duration }],
+                        fallbackUsed: isFallback
                     });
                 } else {
                     updateStatus('❌ Impossible de calculer la route', 'error');
@@ -289,14 +320,37 @@
                 if (result.success) {
                     // Add each segment with different color
                     const colors = ['#e74c3c', '#27ae60', '#3498db', '#f39c12'];
+                    let fallbackCount = 0;
                     
                     result.segments.forEach((segment, index) => {
                         const routeData = { features: [segment.route] };
                         addRouteToMap(routeData, colors[index % colors.length], 4);
+                        
+                        // Count fallback segments
+                        if (segment.route.properties.fallback?.used) {
+                            fallbackCount++;
+                        }
                     });
                     
-                    updateStatus(`✅ Tour complet calculé: ${result.segments.length} segments`, 'success');
-                    updateRouteInfo(result.route);
+                    if (fallbackCount > 0) {
+                        updateStatus(`⚠️ Tour complet calculé: ${result.segments.length} segments (${fallbackCount} en mode fallback)<br><small>Vérifiez la console pour plus de détails</small>`, 'warning');
+                        console.warn(`🚨 ${fallbackCount}/${result.segments.length} segments used fallback routing`);
+                        
+                        // Log details of fallback segments
+                        result.segments.forEach((segment, index) => {
+                            if (segment.route.properties.fallback?.used) {
+                                const fallbackInfo = segment.route.properties.fallback;
+                                console.warn(`   Segment ${index + 1} (${segment.start.name} → ${segment.end.name}): ${fallbackInfo.reason}`);
+                            }
+                        });
+                    } else {
+                        updateStatus(`✅ Tour complet calculé: ${result.segments.length} segments`, 'success');
+                    }
+                    
+                    updateRouteInfo({
+                        ...result.route,
+                        fallbackSegments: fallbackCount
+                    });
                 } else {
                     updateStatus(`❌ Erreur: ${result.error}`, 'error');
                     console.error('Tour calculation failed:', result);
