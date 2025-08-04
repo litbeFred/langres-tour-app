@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guidance System Test - SOLID Architecture</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .map-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .control-panel {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            height: fit-content;
+        }
+        
+        #map {
+            height: 500px;
+            border-radius: 4px;
+            border: 2px solid #ddd;
+        }
+        
+        .test-section {
+            margin: 15px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: #f8f9fa;
+        }
+        
+        .status-section {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .success { 
+            background-color: #d4edda; 
+            border-left: 4px solid #28a745; 
+        }
+        
+        .error { 
+            background-color: #f8d7da; 
+            border-left: 4px solid #dc3545; 
+        }
+        
+        .info { 
+            background-color: #d1ecf1; 
+            border-left: 4px solid #17a2b8; 
+        }
+        
+        .warning { 
+            background-color: #fff3cd; 
+            border-left: 4px solid #ffc107; 
+        }
+        
+        button {
+            margin: 5px;
+            padding: 8px 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+        
+        button:hover { 
+            background-color: #0056b3; 
+        }
+        
+        button:disabled { 
+            background-color: #6c757d; 
+            cursor: not-allowed; 
+        }
+        
+        button.success { 
+            background-color: #28a745; 
+        }
+        
+        button.success:hover { 
+            background-color: #218838; 
+        }
+        
+        button.danger { 
+            background-color: #dc3545; 
+        }
+        
+        button.danger:hover { 
+            background-color: #c82333; 
+        }
+        
+        button.warning { 
+            background-color: #ffc107; 
+            color: #212529; 
+        }
+        
+        button.warning:hover { 
+            background-color: #e0a800; 
+        }
+        
+        .position-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        
+        .position-display {
+            background: #e9ecef;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        #log {
+            height: 200px;
+            overflow-y: auto;
+            background-color: #f8f9fa;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        
+        .poi-list {
+            max-height: 150px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 8px;
+        }
+        
+        .poi-item {
+            padding: 5px;
+            margin: 2px 0;
+            background: white;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background-color 0.2s;
+        }
+        
+        .poi-item:hover {
+            background: #e9ecef;
+        }
+        
+        .poi-item.current {
+            background: #cce5ff;
+            border-left: 3px solid #007bff;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        
+        h2 {
+            color: #555;
+            margin-top: 0;
+            font-size: 18px;
+        }
+        
+        .virtual-controls {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 4px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        
+        input[type="number"] {
+            width: 100%;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-size: 14px;
+        }
+        
+        label {
+            display: block;
+            margin: 5px 0 2px 0;
+            font-weight: bold;
+            font-size: 13px;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        #crossroadMap {
+            height: 180px;
+            border: none;
+            border-radius: 12px;
+            margin-top: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+
+        .crossroad-section {
+            margin-top: 15px;
+            padding: 15px;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+            display: none;
+        }
+
+        .crossroad-section h3 {
+            margin-top: 0;
+            color: #ffffff;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            font-weight: 600;
+        }
+
+        .crossroad-info {
+            margin-top: 8px;
+            text-align: center;
+            opacity: 0.9;
+            font-style: italic;
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .crossroad-info small {
+            color: #f0f8ff;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <h1>🎯 Guidance System Test - SOLID Architecture</h1>
+    
+    <!-- Crossroad Snapshot Container -->
+    <div id="crossroadSnapshot"></div>
+    
+    <div class="container">
+        <div class="map-section">
+            <h2>🗺️ Interactive Navigation Map</h2>
+            <div id="map"></div>
+            
+            <div class="virtual-controls">
+                <h3>Virtual Position Control</h3>
+                <div class="position-controls">
+                    <div>
+                        <label for="virtualLat">Latitude:</label>
+                        <input type="number" id="virtualLat" step="0.0001" value="47.8644" title="Current latitude position">
+                    </div>
+                    <div>
+                        <label for="virtualLon">Longitude:</label>
+                        <input type="number" id="virtualLon" step="0.0001" value="5.3353" title="Current longitude position">
+                    </div>
+                </div>
+                <button id="updatePosBtn">📍 Update Position</button>
+                <button id="simulateBtn" class="warning">🚶 Simulate Walk</button>
+                <button id="stopSimBtn" class="danger">⏹️ Stop Simulation</button>
+            </div>
+        </div>
+        
+        <div class="control-panel">
+            <h2>🎮 Navigation Controls</h2>
+            
+            <div class="test-section info">
+                <div class="status-section info">
+                    <strong>System Status:</strong> <span id="systemStatus">Not initialized</span>
+                </div>
+                
+                <div class="status-section">
+                    <strong>Active Guidance:</strong> <span id="activeGuidance">None</span>
+                </div>
+                
+                <div class="status-section">
+                    <strong>Current Position:</strong> 
+                    <div class="position-display" id="currentPosition">47.8644, 5.3353</div>
+                </div>
+                
+                <div class="status-section info">
+                    <strong>Current Instruction:</strong>
+                    <div class="position-display" id="currentInstruction">No active navigation</div>
+                </div>
+                
+                <div class="status-section warning hidden" id="upcomingInstruction">
+                    <strong>Upcoming:</strong>
+                    <div class="position-display" id="upcomingInstructionText"></div>
+                </div>
+                
+                <div class="status-section crossroad-section hidden" id="crossroadView">
+                    <h3>🛣️ Crossroad Preview</h3>
+                    <div id="crossroadMap"></div>
+                    <div class="crossroad-info">
+                        <small>📍 Upcoming turn location</small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="test-section">
+                <h3>Initialize System</h3>
+                <button id="initBtn" class="success">🚀 Initialize Guidance System</button>
+            </div>
+            
+            <div class="test-section">
+                <h3>Guided Tour</h3>
+                <button id="startTourBtn" disabled>🎯 Start Guided Tour</button>
+                <button id="stopBtn" disabled class="danger">⏹️ Stop Guidance</button>
+                
+                <div class="poi-list" id="poiList">
+                    <div class="poi-item">Loading POIs...</div>
+                </div>
+            </div>
+            
+            <div class="test-section">
+                <h3>Back-on-Track</h3>
+                <button id="backOnTrackBtn" disabled class="warning">🔄 Test Back-on-Track</button>
+                <button id="deviateBtn" disabled>📍 Simulate Deviation</button>
+            </div>
+            
+            <div class="test-section">
+                <h3>Settings</h3>
+                <label>
+                    <input type="checkbox" id="audioEnabled" checked> Audio Enabled
+                </label>
+                <br>
+                <label>
+                    <input type="checkbox" id="autoAdvance" checked> Auto Advance POI
+                </label>
+            </div>
+            
+            <div class="test-section">
+                <h3>Event Log</h3>
+                <div id="log"></div>
+                <button id="clearLogBtn">Clear Log</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- External Dependencies -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Main Application Script -->
+    <script type="module">
+        import { TestApplication } from './test/TestApplication.js';
+
+        // Initialize application when page loads
+        let testApp = null;
+
+        async function initializeApp() {
+            try {
+                console.log('🚀 Starting Test Application...');
+                testApp = await TestApplication.create();
+                console.log('✅ Test Application initialized successfully');
+                
+                // Make app available globally for debugging
+                window.testApp = testApp;
+                
+            } catch (error) {
+                console.error('❌ Failed to initialize Test Application:', error);
+                
+                // Show error in UI if possible
+                const logElement = document.getElementById('log');
+                if (logElement) {
+                    const timestamp = new Date().toLocaleTimeString();
+                    logElement.textContent += `[${timestamp}] ❌ Failed to initialize: ${error.message}\n`;
+                }
+            }
+        }
+
+        // Cleanup when page unloads
+        window.addEventListener('beforeunload', () => {
+            if (testApp) {
+                testApp.cleanup();
+            }
+        });
+
+        // Initialize when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeApp);
+        } else {
+            initializeApp();
+        }
+    </script>
+</body>
+</html>

@@ -419,14 +419,31 @@ export class GuidedTourService {
     }
 
     /**
-     * Get current position using location service
+     * Get current position using location service or mock position for testing
      * @returns {Promise<Array>} [latitude, longitude]
      */
     async getCurrentPosition() {
+        // Check if we're in a testing environment or if a virtual position is available
+        if (typeof window !== 'undefined' && window.testingCurrentPosition) {
+            console.log('🧪 Using virtual position for testing:', window.testingCurrentPosition);
+            return window.testingCurrentPosition;
+        }
+        
         return new Promise((resolve, reject) => {
+            if (!navigator.geolocation) {
+                // Fallback to default Langres position if geolocation not available
+                console.warn('🌍 Geolocation not available, using default Langres position');
+                resolve([47.8644, 5.3353]);
+                return;
+            }
+            
             navigator.geolocation.getCurrentPosition(
                 position => resolve([position.coords.latitude, position.coords.longitude]),
-                error => reject(error),
+                error => {
+                    console.warn('🌍 Geolocation failed, using default Langres position:', error.message);
+                    // Fallback to default Langres position
+                    resolve([47.8644, 5.3353]);
+                },
                 { enableHighAccuracy: true, timeout: 10000 }
             );
         });

@@ -206,6 +206,7 @@ export class OSMRoutingService {
             }
             
             console.warn(`🔄 OSRM routing API unavailable (${errorType}), falling back to direct route:`, errorDetails);
+            console.warn('⚠️ WARNING: Using simplified straight-line fallback routing - turn-by-turn instructions will be basic');
             console.warn('🔍 Full error details:', {
                 type: errorType,
                 message: errorDetails,

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SOLID Architecture Test Runner</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .button {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        .button:hover {
+            background: #0056b3;
+        }
+        #testResults {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            border-left: 4px solid #17a2b8;
+            margin-top: 20px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🧪 SOLID Architecture Test Runner</h1>
+        <p>This test validates that the refactored guidance test components follow SOLID principles.</p>
+        
+        <button class="button" onclick="runSOLIDTests()">🚀 Run SOLID Architecture Tests</button>
+        <button class="button" onclick="openRefactoredApp()">🎯 Open Refactored App</button>
+        <button class="button" onclick="openOriginalApp()">📄 Open Original App</button>
+        
+        <div id="testResults"></div>
+    </div>
+
+    <script type="module">
+        import { TestRunner } from './test/TestRunner.js';
+        
+        // Make functions available globally for button clicks
+        window.runSOLIDTests = async function() {
+            const resultsDiv = document.getElementById('testResults');
+            resultsDiv.textContent = 'Running tests...\n';
+            
+            try {
+                const runner = new TestRunner();
+                
+                // Capture console output
+                const originalLog = console.log;
+                const originalError = console.error;
+                let output = '';
+                
+                console.log = (...args) => {
+                    output += args.join(' ') + '\n';
+                    originalLog(...args);
+                };
+                
+                console.error = (...args) => {
+                    output += args.join(' ') + '\n';
+                    originalError(...args);
+                };
+                
+                const results = await runner.runAllTests();
+                
+                // Restore console
+                console.log = originalLog;
+                console.error = originalError;
+                
+                resultsDiv.textContent = output;
+                
+            } catch (error) {
+                resultsDiv.textContent = `Error running tests: ${error.message}`;
+            }
+        };
+        
+        window.openRefactoredApp = function() {
+            window.open('./test-guidance-refactored.html', '_blank');
+        };
+        
+        window.openOriginalApp = function() {
+            window.open('./test-guidance-browser.html', '_blank');
+        };
+    </script>
+</body>
+</html>

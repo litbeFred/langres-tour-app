@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Langres Tour - Simplified Guidance System</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .app-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .app-header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            text-align: center;
+            padding: 30px 20px;
+        }
+        
+        .app-header h1 {
+            margin: 0 0 10px 0;
+            font-size: 28px;
+            font-weight: 300;
+        }
+        
+        .app-header p {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 16px;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            min-height: 600px;
+        }
+        
+        .map-section {
+            position: relative;
+            background: #f8f9fa;
+        }
+        
+        #map {
+            width: 100%;
+            height: 600px;
+        }
+        
+        .control-panel {
+            background: #f8f9fa;
+            padding: 20px;
+            border-left: 1px solid #dee2e6;
+            overflow-y: auto;
+            max-height: 600px;
+        }
+        
+        .status-section {
+            margin: 15px 0;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        .status-section h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #495057;
+        }
+        
+        .test-section {
+            margin: 20px 0;
+        }
+        
+        .test-section h3 {
+            color: #495057;
+            margin: 0 0 15px 0;
+            font-size: 18px;
+            font-weight: 500;
+        }
+        
+        button {
+            margin: 5px;
+            padding: 10px 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+        
+        button:hover {
+            background-color: #0056b3;
+            transform: translateY(-1px);
+        }
+        
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        button.danger {
+            background-color: #dc3545;
+        }
+        
+        button.danger:hover {
+            background-color: #c82333;
+        }
+        
+        .poi-list {
+            max-height: none;
+            background: transparent;
+            border: none;
+            padding: 0;
+        }
+        
+        .virtual-controls {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            display: none;
+        }
+        
+        .virtual-controls h4 {
+            margin: 0 0 10px 0;
+            color: #856404;
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+            align-items: center;
+        }
+        
+        .input-group label {
+            min-width: 60px;
+            font-weight: 500;
+            color: #495057;
+        }
+        
+        .input-group input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        #log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            line-height: 1.4;
+        }
+        
+        .crossroad-section {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            border: 1px solid #2196f3;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        
+        #crossroadMap {
+            width: 100%;
+            height: 200px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+        
+        .crossroad-info {
+            text-align: center;
+            color: #1976d2;
+            font-weight: 500;
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .control-panel {
+                border-left: none;
+                border-top: 1px solid #dee2e6;
+                max-height: none;
+            }
+            
+            body {
+                padding: 10px;
+            }
+        }
+        
+        /* Loading state */
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        
+        /* Success animations */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .success-pulse {
+            animation: pulse 0.6s ease-in-out;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- App Header -->
+        <div class="app-header">
+            <h1>🏛️ Langres Historical Tour</h1>
+            <p>Simplified Guidance System - Just select a destination and follow the directions!</p>
+        </div>
+        
+        <!-- Main Content Area -->
+        <div class="main-content">
+            <!-- Map Section -->
+            <div class="map-section">
+                <div id="map"></div>
+            </div>
+            
+            <!-- Control Panel -->
+            <div class="control-panel">
+                <!-- System Status -->
+                <div class="status-section" id="systemStatusSection">
+                    <h3>📊 System Status</h3>
+                    <div id="systemStatus">Initializing...</div>
+                </div>
+                
+                <!-- Current Position -->
+                <div class="status-section">
+                    <h3>📍 Current Position</h3>
+                    <div id="currentPosition">Getting location...</div>
+                </div>
+                
+                <!-- Active Guidance -->
+                <div class="status-section">
+                    <h3>🧭 Active Guidance</h3>
+                    <div id="activeGuidance">None</div>
+                </div>
+                
+                <!-- Current Instruction -->
+                <div class="status-section">
+                    <h3>📢 Navigation Instruction</h3>
+                    <div id="currentInstruction">Select a destination to start</div>
+                </div>
+                
+                <!-- Crossroad Preview -->
+                <div class="status-section crossroad-section hidden" id="crossroadView">
+                    <h3>🛣️ Crossroad Preview</h3>
+                    <div id="crossroadMap"></div>
+                    <div class="crossroad-info">
+                        <small>📍 Upcoming turn location</small>
+                    </div>
+                </div>
+                
+                <!-- Hidden Initialize Button (fallback) -->
+                <div class="test-section">
+                    <button id="initBtn" style="display: none;">🚀 Initialize Guidance System</button>
+                </div>
+                
+                <!-- POI Selection -->
+                <div class="test-section">
+                    <h3>🎯 Select Your Destination</h3>
+                    <div class="poi-list" id="poiList">
+                        <div class="poi-item">Loading destinations...</div>
+                    </div>
+                </div>
+                
+                <!-- Emergency Controls -->
+                <div class="test-section">
+                    <h3>🚨 Emergency Controls</h3>
+                    <button id="stopBtn" class="danger" style="display: none;">⏹️ Stop Guidance</button>
+                </div>
+                
+                <!-- Manual Position Control -->
+                <div class="virtual-controls">
+                    <h4>✏️ Manual Position Control</h4>
+                    <div class="input-group">
+                        <label>Lat:</label>
+                        <input type="number" id="virtualLat" step="0.0001" value="47.8644" />
+                    </div>
+                    <div class="input-group">
+                        <label>Lon:</label>
+                        <input type="number" id="virtualLon" step="0.0001" value="5.3353" />
+                    </div>
+                    <button id="updatePosBtn">📍 Update Position</button>
+                </div>
+                
+                <!-- Simulation Controls -->
+                <div class="test-section">
+                    <h3>🎮 Simulation Controls</h3>
+                    <button id="stopSimBtn">⏹️ Stop Simulation</button>
+                </div>
+                
+                <!-- Activity Log -->
+                <div class="test-section">
+                    <h3>📋 Activity Log</h3>
+                    <div id="log"></div>
+                    <button id="clearLogBtn">🗑️ Clear Log</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script type="module">
+        import { SimplifiedTestApplication } from './test/SimplifiedTestApplication.js';
+        
+        // The SimplifiedTestApplication auto-starts on DOMContentLoaded
+        // No manual initialization required!
+        
+        console.log('🚀 Langres Simplified Guidance System Loading...');
+        
+        // Optional: Add some loading feedback
+        const statusElement = document.getElementById('systemStatus');
+        if (statusElement) {
+            statusElement.textContent = 'Loading simplified guidance system...';
+            statusElement.className = 'status-section info';
+        }
+    </script>
+</body>
+</html>
