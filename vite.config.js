@@ -18,7 +18,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: 'index.html',
-        test: 'test-guidance-browser.html',
         osm: 'test-osm-routing.html'
       }
     }
