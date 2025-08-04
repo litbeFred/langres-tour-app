@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Route Storage Backend Demo - Langres Tour App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        
+        header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .demo-section {
+            margin-bottom: 40px;
+            padding: 25px;
+            border: 2px solid #ecf0f1;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        
+        .demo-section h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .demo-section p {
+            color: #7f8c8d;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+        }
+        
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #229954;
+            transform: translateY(-2px);
+        }
+        
+        .btn-warning {
+            background: #f39c12;
+            color: white;
+        }
+        
+        .btn-warning:hover {
+            background: #e67e22;
+            transform: translateY(-2px);
+        }
+        
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #c0392b;
+            transform: translateY(-2px);
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        .status-panel {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .status-panel h3 {
+            margin-bottom: 15px;
+            color: #3498db;
+        }
+        
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .status-item {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 4px;
+        }
+        
+        .status-item strong {
+            color: #3498db;
+        }
+        
+        .log-output {
+            background: #1e1e1e;
+            color: #00ff00;
+            padding: 20px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+            border: 1px solid #333;
+        }
+        
+        .log-output:empty::before {
+            content: "Waiting for debug output...";
+            color: #888;
+            font-style: italic;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .feature-card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .feature-card h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .feature-card ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .feature-card li {
+            padding: 8px 0;
+            border-bottom: 1px solid #ecf0f1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .feature-card li:last-child {
+            border-bottom: none;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: #e74c3c;
+            color: white;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+        
+        .success {
+            background: #27ae60;
+            color: white;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+        
+        .info {
+            background: #3498db;
+            color: white;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏗️ Route Storage Backend Demo</h1>
+            <p>OSRM Route Calculation, Storage & Reuse System for Langres Tour App</p>
+        </header>
+        
+        <div class="content">
+            <!-- System Status -->
+            <div class="demo-section">
+                <h2>📊 System Status</h2>
+                <p>Current status of the route storage backend system and available services.</p>
+                
+                <div class="status-panel" id="system-status">
+                    <h3>System Status</h3>
+                    <div class="status-grid">
+                        <div class="status-item">
+                            <strong>Backend Status:</strong><br>
+                            <span id="backend-status">Initializing...</span>
+                        </div>
+                        <div class="status-item">
+                            <strong>Stored Routes:</strong><br>
+                            <span id="stored-routes-count">-</span>
+                        </div>
+                        <div class="status-item">
+                            <strong>Total Distance:</strong><br>
+                            <span id="total-distance">-</span>
+                        </div>
+                        <div class="status-item">
+                            <strong>Storage Size:</strong><br>
+                            <span id="storage-size">-</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="button-group">
+                    <button class="btn btn-primary" onclick="updateSystemStatus()">
+                        🔄 Refresh Status
+                    </button>
+                    <button class="btn btn-success" onclick="enableDebugMode()">
+                        🔧 Enable Debug Mode
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Route Calculation & Storage -->
+            <div class="demo-section">
+                <h2>🗺️ Route Calculation & Storage</h2>
+                <p>Calculate the complete Langres tour route using OSRM and store it for future reuse.</p>
+                
+                <div class="button-group">
+                    <button class="btn btn-primary" onclick="calculateAndStoreRoute()" id="calc-store-btn">
+                        🚀 Calculate & Store Tour Route
+                    </button>
+                    <button class="btn btn-warning" onclick="checkRouteNeedsUpdate()">
+                        🔍 Check Route Status
+                    </button>
+                    <button class="btn btn-success" onclick="recalculateSegment()">
+                        🔧 Recalculate Segment
+                    </button>
+                </div>
+                
+                <div id="calculation-result"></div>
+            </div>
+            
+            <!-- Route Retrieval & Usage -->
+            <div class="demo-section">
+                <h2>📁 Route Retrieval & Usage</h2>
+                <p>Retrieve stored routes and test their usage in the guidance system.</p>
+                
+                <div class="button-group">
+                    <button class="btn btn-primary" onclick="getStoredRoute()">
+                        📂 Get Stored Route
+                    </button>
+                    <button class="btn btn-success" onclick="testStoredRouteGuidance()">
+                        🎯 Test Stored Route Guidance
+                    </button>
+                    <button class="btn btn-warning" onclick="testRouteAdherence()">
+                        📍 Test Route Adherence
+                    </button>
+                </div>
+                
+                <div id="retrieval-result"></div>
+            </div>
+            
+            <!-- Performance Testing -->
+            <div class="demo-section">
+                <h2>🏁 Performance Testing</h2>
+                <p>Compare performance between stored routes and fresh OSRM calculations.</p>
+                
+                <div class="button-group">
+                    <button class="btn btn-primary" onclick="runPerformanceTest()">
+                        🏁 Run Performance Test
+                    </button>
+                    <button class="btn btn-success" onclick="runFullTestSuite()">
+                        🧪 Run Full Test Suite
+                    </button>
+                    <button class="btn btn-warning" onclick="generateDebugReport()">
+                        📊 Generate Debug Report
+                    </button>
+                </div>
+                
+                <div id="performance-result"></div>
+            </div>
+            
+            <!-- Backend Management -->
+            <div class="demo-section">
+                <h2>🛠️ Backend Management</h2>
+                <p>Manage stored routes, cleanup old data, and configure backend settings.</p>
+                
+                <div class="button-group">
+                    <button class="btn btn-primary" onclick="listStoredRoutes()">
+                        📋 List Stored Routes
+                    </button>
+                    <button class="btn btn-warning" onclick="cleanupOldRoutes()">
+                        🧹 Cleanup Old Routes
+                    </button>
+                    <button class="btn btn-success" onclick="createBackup()">
+                        💾 Create Backup
+                    </button>
+                    <button class="btn btn-danger" onclick="clearAllRoutes()">
+                        🗑️ Clear All Routes
+                    </button>
+                </div>
+                
+                <div id="management-result"></div>
+            </div>
+            
+            <!-- Features Overview -->
+            <div class="demo-section">
+                <h2>✨ Features Overview</h2>
+                <p>Key features and capabilities of the route storage backend system.</p>
+                
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h3>🏗️ Backend Services</h3>
+                        <ul>
+                            <li>✅ RouteStorageService - Persistent storage</li>
+                            <li>✅ RouteBackendService - Route management</li>
+                            <li>✅ StoredRouteService - Route retrieval</li>
+                            <li>✅ EnhancedGuidanceService - Integration</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h3>🎯 SOLID Principles</h3>
+                        <ul>
+                            <li>✅ Single Responsibility</li>
+                            <li>✅ Open/Closed</li>
+                            <li>✅ Liskov Substitution</li>
+                            <li>✅ Interface Segregation</li>
+                            <li>✅ Dependency Inversion</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h3>🚀 Performance Benefits</h3>
+                        <ul>
+                            <li>⚡ No OSRM calls for stored routes</li>
+                            <li>🔄 Instant route retrieval</li>
+                            <li>💾 Efficient caching system</li>
+                            <li>📊 Performance monitoring</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="feature-card">
+                        <h3>🛡️ Error Handling</h3>
+                        <ul>
+                            <li>🔄 Fallback to OSRM</li>
+                            <li>✅ Route validation</li>
+                            <li>🔧 Debug capabilities</li>
+                            <li>📝 Comprehensive logging</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Debug Output -->
+            <div class="demo-section">
+                <h2>🔧 Debug Output</h2>
+                <p>Real-time debug information and system logs.</p>
+                <div class="log-output" id="debug-output"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module">
+        import { RouteStorageDebugger } from './src/utils/RouteStorageDebugger.js';
+        import tourData from './src/data/tourData.json' assert { type: 'json' };
+        
+        // Global variables
+        let routeDebuggerInstance;
+        let isInitialized = false;
+        
+        // Initialize the system
+        async function initialize() {
+            try {
+                log('🔧 Initializing Route Storage Backend Demo...');
+                
+                routeDebuggerInstance = new RouteStorageDebugger(tourData);
+                window.routeDebugger = routeDebuggerInstance; // Make globally accessible
+                
+                // Override console.log to also show in UI
+                const originalLog = console.log;
+                console.log = (...args) => {
+                    originalLog(...args);
+                    log(args.join(' '));
+                };
+                
+                await updateSystemStatus();
+                isInitialized = true;
+                
+                log('✅ System initialized successfully');
+                
+            } catch (error) {
+                logError('❌ Failed to initialize system: ' + error.message);
+            }
+        }
+        
+        // Utility functions
+        function log(message) {
+            const output = document.getElementById('debug-output');
+            const timestamp = new Date().toLocaleTimeString();
+            output.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        function logError(message) {
+            log(`<span style="color: #ff6b6b;">${message}</span>`);
+        }
+        
+        function logSuccess(message) {
+            log(`<span style="color: #51cf66;">${message}</span>`);
+        }
+        
+        function showResult(containerId, content, type = 'info') {
+            const container = document.getElementById(containerId);
+            container.innerHTML = `<div class="${type}">${content}</div>`;
+        }
+        
+        function setButtonLoading(buttonId, loading = true) {
+            const button = document.getElementById(buttonId);
+            if (!button) return;
+            
+            button.disabled = loading;
+            if (loading) {
+                button.innerHTML = button.innerHTML.replace(/^[^\\s]+/, '<div class="loading"></div>');
+            }
+        }
+        
+        // Demo functions
+        window.updateSystemStatus = async function() {
+            if (!isInitialized) return;
+            
+            try {
+                log('🔄 Updating system status...');
+                
+                const backendStatus = await routeDebuggerInstance.routeBackendService.getBackendStatus();
+                const storageStats = await routeDebuggerInstance.routeStorageService.getStorageStats();
+                
+                document.getElementById('backend-status').textContent = 
+                    backendStatus.isCalculating ? 'Calculating...' : 'Ready';
+                document.getElementById('stored-routes-count').textContent = storageStats.routeCount;
+                document.getElementById('total-distance').textContent = 
+                    `${(storageStats.totalDistance / 1000).toFixed(1)} km`;
+                document.getElementById('storage-size').textContent = 
+                    `${(storageStats.totalSize / 1024).toFixed(1)} KB`;
+                
+                logSuccess('✅ System status updated');
+                
+            } catch (error) {
+                logError('❌ Failed to update system status: ' + error.message);
+            }
+        };
+        
+        window.enableDebugMode = function() {
+            routeDebuggerInstance.setDebugMode(true);
+            logSuccess('🔧 Debug mode enabled');
+        };
+        
+        window.calculateAndStoreRoute = async function() {
+            if (!isInitialized) return;
+            
+            try {
+                setButtonLoading('calc-store-btn', true);
+                log('🚀 Starting route calculation and storage...');
+                
+                const result = await routeDebuggerInstance.routeBackendService.calculateAndStoreTourRoute();
+                
+                if (result.success) {
+                    logSuccess(`✅ Route calculated and stored: ${result.routeId}`);
+                    showResult('calculation-result', 
+                        `<strong>Success!</strong><br>
+                         Route ID: ${result.routeId}<br>
+                         Distance: ${(result.metadata.totalDistance / 1000).toFixed(2)} km<br>
+                         Duration: ${Math.round(result.metadata.totalDuration / 60)} minutes<br>
+                         Segments: ${result.metadata.segmentCount}<br>
+                         Calculation Time: ${result.calculationTime} ms`, 
+                        'success');
+                } else {
+                    logError(`❌ Route calculation failed: ${result.error}`);
+                    showResult('calculation-result', 
+                        `<strong>Error:</strong> ${result.error}`, 'error');
+                }
+                
+                await updateSystemStatus();
+                
+            } catch (error) {
+                logError('❌ Route calculation error: ' + error.message);
+                showResult('calculation-result', 
+                    `<strong>Error:</strong> ${error.message}`, 'error');
+            } finally {
+                setButtonLoading('calc-store-btn', false);
+            }
+        };
+        
+        window.getStoredRoute = async function() {
+            if (!isInitialized) return;
+            
+            try {
+                log('📂 Retrieving stored route...');
+                
+                const result = await routeDebuggerInstance.storedRouteService.getTourRoute();
+                
+                if (result.success) {
+                    logSuccess(`✅ Stored route retrieved from: ${result.source}`);
+                    showResult('retrieval-result', 
+                        `<strong>Success!</strong><br>
+                         Source: ${result.source}<br>
+                         Route ID: ${result.routeId || 'N/A'}<br>
+                         Distance: ${(result.route.summary.distance / 1000).toFixed(2)} km<br>
+                         Duration: ${Math.round(result.route.summary.duration / 60)} minutes<br>
+                         Provider: ${result.provider}`, 
+                        'success');
+                } else {
+                    logError(`❌ Failed to get stored route: ${result.error}`);
+                    showResult('retrieval-result', 
+                        `<strong>Error:</strong> ${result.error}`, 'error');
+                }
+                
+            } catch (error) {
+                logError('❌ Route retrieval error: ' + error.message);
+                showResult('retrieval-result', 
+                    `<strong>Error:</strong> ${error.message}`, 'error');
+            }
+        };
+        
+        window.runPerformanceTest = async function() {
+            if (!isInitialized) return;
+            
+            try {
+                log('🏁 Running performance test...');
+                
+                const result = await routeDebuggerInstance.testPerformanceComparison();
+                
+                if (result.comparison && result.comparison.speedImprovementPercent) {
+                    const improvement = result.comparison.speedImprovementPercent.toFixed(1);
+                    logSuccess(`✅ Performance test completed: ${improvement}% improvement`);
+                    
+                    showResult('performance-result', 
+                        `<strong>Performance Comparison Results:</strong><br>
+                         Stored Route: ${result.storedRoute.duration} ms<br>
+                         OSRM Route: ${result.osrmRoute.duration} ms<br>
+                         Speed Improvement: ${improvement}%<br>
+                         Time Saved: ${result.comparison.timeSavedMs} ms<br>
+                         Recommendation: ${result.comparison.recommendation}`, 
+                        'success');
+                } else {
+                    logError(`❌ Performance test incomplete`);
+                    showResult('performance-result', 
+                        `<strong>Test Results:</strong><br>
+                         Stored Route: ${result.storedRoute.success ? 'Available' : 'Not Available'}<br>
+                         OSRM Route: ${result.osrmRoute.success ? 'Available' : 'Not Available'}<br>
+                         Unable to complete comparison.`, 
+                        'info');
+                }
+                
+            } catch (error) {
+                logError('❌ Performance test error: ' + error.message);
+                showResult('performance-result', 
+                    `<strong>Error:</strong> ${error.message}`, 'error');
+            }
+        };
+        
+        window.runFullTestSuite = async function() {
+            if (!isInitialized) return;
+            
+            try {
+                log('🧪 Running full test suite...');
+                
+                const result = await routeDebuggerInstance.testRouteCalculationAndStorage();
+                
+                const passedTests = result.tests.filter(t => t.success).length;
+                const totalTests = result.tests.length;
+                
+                if (result.success) {
+                    logSuccess(`✅ All tests passed: ${passedTests}/${totalTests}`);
+                    showResult('performance-result', 
+                        `<strong>Test Suite Results:</strong><br>
+                         Tests Passed: ${passedTests}/${totalTests}<br>
+                         Duration: ${result.duration} ms<br>
+                         Status: All tests successful`, 
+                        'success');
+                } else {
+                    logError(`❌ Some tests failed: ${passedTests}/${totalTests}`);
+                    showResult('performance-result', 
+                        `<strong>Test Suite Results:</strong><br>
+                         Tests Passed: ${passedTests}/${totalTests}<br>
+                         Duration: ${result.duration} ms<br>
+                         Error: ${result.error}`, 
+                        'error');
+                }
+                
+            } catch (error) {
+                logError('❌ Test suite error: ' + error.message);
+                showResult('performance-result', 
+                    `<strong>Error:</strong> ${error.message}`, 'error');
+            }
+        };
+        
+        window.listStoredRoutes = async function() {
+            if (!isInitialized) return;
+            
+            try {
+                log('📋 Listing stored routes...');
+                
+                const routes = await routeDebuggerInstance.routeStorageService.listStoredRoutes();
+                
+                if (routes.length > 0) {
+                    logSuccess(`✅ Found ${routes.length} stored routes`);
+                    
+                    const routeList = routes.map(route => 
+                        `• ${route.id} (${(route.totalDistance / 1000).toFixed(1)}km, ${route.poiCount} POIs)`
+                    ).join('<br>');
+                    
+                    showResult('management-result', 
+                        `<strong>Stored Routes (${routes.length}):</strong><br>${routeList}`, 
+                        'info');
+                } else {
+                    log('ℹ️ No stored routes found');
+                    showResult('management-result', 
+                        '<strong>No stored routes found.</strong><br>Calculate and store a route first.', 
+                        'info');
+                }
+                
+            } catch (error) {
+                logError('❌ List routes error: ' + error.message);
+                showResult('management-result', 
+                    `<strong>Error:</strong> ${error.message}`, 'error');
+            }
+        };
+        
+        window.clearAllRoutes = async function() {
+            if (!isInitialized) return;
+            
+            if (!confirm('Are you sure you want to clear all stored routes? This cannot be undone.')) {
+                return;
+            }
+            
+            try {
+                log('🗑️ Clearing all stored routes...');
+                
+                const result = await routeDebuggerInstance.routeStorageService.clearAllRoutes();
+                
+                if (result) {
+                    logSuccess('✅ All routes cleared successfully');
+                    showResult('management-result', 
+                        '<strong>Success:</strong> All stored routes have been cleared.', 
+                        'success');
+                    await updateSystemStatus();
+                } else {
+                    logError('❌ Failed to clear routes');
+                    showResult('management-result', 
+                        '<strong>Error:</strong> Failed to clear stored routes.', 'error');
+                }
+                
+            } catch (error) {
+                logError('❌ Clear routes error: ' + error.message);
+                showResult('management-result', 
+                    `<strong>Error:</strong> ${error.message}`, 'error');
+            }
+        };
+        
+        // Additional demo functions
+        window.checkRouteNeedsUpdate = async function() {
+            if (!isInitialized) return;
+            
+            try {
+                log('🔍 Checking if route needs update...');
+                
+                const routes = await routeDebuggerInstance.routeStorageService.listStoredRoutes();
+                if (routes.length === 0) {
+                    showResult('calculation-result', 
+                        '<strong>No stored routes found.</strong><br>Calculate and store a route first.', 
+                        'info');
+                    return;
+                }
+                
+                const routeId = routes[0].id;
+                const result = await routeDebuggerInstance.routeBackendService.checkRouteNeedsUpdate(routeId);
+                
+                showResult('calculation-result', 
+                    `<strong>Route Update Check:</strong><br>
+                     Route ID: ${routeId}<br>
+                     Needs Update: ${result.needsUpdate ? 'Yes' : 'No'}<br>
+                     Reason: ${result.reason}<br>
+                     Recommendation: ${result.recommendation}`, 
+                    result.needsUpdate ? 'warning' : 'success');
+                
+                log(`🔍 Route update check: ${result.needsUpdate ? 'Update needed' : 'Up to date'}`);
+                
+            } catch (error) {
+                logError('❌ Route check error: ' + error.message);
+                showResult('calculation-result', 
+                    `<strong>Error:</strong> ${error.message}`, 'error');
+            }
+        };
+        
+        window.testStoredRouteGuidance = async function() {
+            if (!isInitialized) return;
+            
+            try {
+                log('🎯 Testing stored route guidance...');
+                
+                // Simulate starting guidance with stored route
+                const result = await routeDebuggerInstance.storedRouteService.getTourRoute();
+                
+                if (result.success && result.source === 'stored') {
+                    logSuccess('✅ Stored route guidance test successful');
+                    showResult('retrieval-result', 
+                        `<strong>Guidance Test Success!</strong><br>
+                         Using stored route (no OSRM calls needed)<br>
+                         Source: ${result.source}<br>
+                         Route ready for guidance system`, 
+                        'success');
+                } else {
+                    log('⚠️ Stored route not available, would fallback to OSRM');
+                    showResult('retrieval-result', 
+                        `<strong>Fallback Mode:</strong><br>
+                         No stored route available<br>
+                         Would use OSRM calculation<br>
+                         Consider calculating and storing a route`, 
+                        'warning');
+                }
+                
+            } catch (error) {
+                logError('❌ Guidance test error: ' + error.message);
+                showResult('retrieval-result', 
+                    `<strong>Error:</strong> ${error.message}`, 'error');
+            }
+        };
+        
+        window.testRouteAdherence = async function() {
+            if (!isInitialized) return;
+            
+            try {
+                log('📍 Testing route adherence...');
+                
+                // Test with first POI position
+                const testPosition = [tourData[0].lat, tourData[0].lon];
+                
+                if (!routeDebuggerInstance.storedRouteService.hasStoredRoute()) {
+                    showResult('retrieval-result', 
+                        '<strong>No stored route available.</strong><br>Calculate and store a route first to test adherence.', 
+                        'info');
+                    return;
+                }
+                
+                const adherenceCheck = routeDebuggerInstance.storedRouteService.isOnStoredRoute(testPosition, 100);
+                
+                showResult('retrieval-result', 
+                    `<strong>Route Adherence Test:</strong><br>
+                     Test Position: [${testPosition[0].toFixed(5)}, ${testPosition[1].toFixed(5)}]<br>
+                     On Route: ${adherenceCheck.onRoute ? 'Yes' : 'No'}<br>
+                     Distance from Route: ${adherenceCheck.distance ? adherenceCheck.distance.toFixed(0) + 'm' : 'N/A'}<br>
+                     Threshold: ${adherenceCheck.threshold}m<br>
+                     Status: ${adherenceCheck.reason}`, 
+                    adherenceCheck.onRoute ? 'success' : 'warning');
+                
+                log(`📍 Adherence test: ${adherenceCheck.onRoute ? 'On route' : 'Off route'}`);
+                
+            } catch (error) {
+                logError('❌ Adherence test error: ' + error.message);
+                showResult('retrieval-result', 
+                    `<strong>Error:</strong> ${error.message}`, 'error');
+            }
+        };
+        
+        window.recalculateSegment = async function() {
+            if (!isInitialized) return;
+            
+            try {
+                log('🔧 Testing segment recalculation...');
+                
+                const routes = await routeDebuggerInstance.routeStorageService.listStoredRoutes();
+                if (routes.length === 0) {
+                    showResult('calculation-result', 
+                        '<strong>No stored routes found.</strong><br>Calculate and store a route first.', 
+                        'info');
+                    return;
+                }
+                
+                const routeId = routes[0].id;
+                const segmentIndex = 0; // Recalculate first segment
+                
+                const result = await routeDebuggerInstance.routeBackendService.recalculateSegment(routeId, segmentIndex);
+                
+                if (result.success) {
+                    logSuccess(`✅ Segment ${segmentIndex} recalculated successfully`);
+                    showResult('calculation-result', 
+                        `<strong>Segment Recalculated:</strong><br>
+                         Route ID: ${result.routeId}<br>
+                         Segment: ${result.segmentIndex}<br>
+                         New Distance: ${(result.newTotalDistance / 1000).toFixed(2)} km<br>
+                         New Duration: ${Math.round(result.newTotalDuration / 60)} minutes`, 
+                        'success');
+                } else {
+                    logError(`❌ Segment recalculation failed: ${result.error}`);
+                    showResult('calculation-result', 
+                        `<strong>Error:</strong> ${result.error}`, 'error');
+                }
+                
+            } catch (error) {
+                logError('❌ Segment recalculation error: ' + error.message);
+                showResult('calculation-result', 
+                    `<strong>Error:</strong> ${error.message}`, 'error');
+            }
+        };
+        
+        window.cleanupOldRoutes = async function() {
+            if (!isInitialized) return;
+            
+            try {
+                log('🧹 Cleaning up old routes...');
+                
+                const result = await routeDebuggerInstance.cleanupOldRoutes();
+                
+                if (result.success) {
+                    logSuccess(`✅ Cleanup completed: ${result.message}`);
+                    showResult('management-result', 
+                        `<strong>Cleanup Results:</strong><br>
+                         ${result.message}<br>
+                         Deleted: ${result.deletedCount || 0} routes<br>
+                         Remaining: ${result.remainingCount || 0} routes`, 
+                        'success');
+                    await updateSystemStatus();
+                } else {
+                    logError(`❌ Cleanup failed: ${result.error}`);
+                    showResult('management-result', 
+                        `<strong>Error:</strong> ${result.error}`, 'error');
+                }
+                
+            } catch (error) {
+                logError('❌ Cleanup error: ' + error.message);
+                showResult('management-result', 
+                    `<strong>Error:</strong> ${error.message}`, 'error');
+            }
+        };
+        
+        window.createBackup = async function() {
+            if (!isInitialized) return;
+            
+            try {
+                log('💾 Creating backup...');
+                
+                const backup = await routeDebuggerInstance.routeStorageService.createBackup();
+                
+                if (backup) {
+                    const routeCount = Object.keys(backup.routes).length;
+                    logSuccess(`✅ Backup created with ${routeCount} routes`);
+                    
+                    // Create download link
+                    const dataStr = JSON.stringify(backup, null, 2);
+                    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+                    const url = URL.createObjectURL(dataBlob);
+                    
+                    const downloadLink = `<a href="${url}" download="langres-routes-backup.json" style="color: white; text-decoration: underline;">Download Backup File</a>`;
+                    
+                    showResult('management-result', 
+                        `<strong>Backup Created:</strong><br>
+                         Routes: ${routeCount}<br>
+                         Created: ${backup.timestamp}<br>
+                         ${downloadLink}`, 
+                        'success');
+                } else {
+                    logError('❌ Failed to create backup');
+                    showResult('management-result', 
+                        '<strong>Error:</strong> Failed to create backup.', 'error');
+                }
+                
+            } catch (error) {
+                logError('❌ Backup error: ' + error.message);
+                showResult('management-result', 
+                    `<strong>Error:</strong> ${error.message}`, 'error');
+            }
+        };
+        
+        window.generateDebugReport = async function() {
+            if (!isInitialized) return;
+            
+            try {
+                log('📊 Generating debug report...');
+                
+                const report = await routeDebuggerInstance.generateDebugReport();
+                
+                logSuccess('✅ Debug report generated');
+                
+                const recommendationCount = report.recommendations ? report.recommendations.length : 0;
+                
+                showResult('performance-result', 
+                    `<strong>Debug Report Generated:</strong><br>
+                     Timestamp: ${report.timestamp}<br>
+                     Stored Routes: ${report.routes.count}<br>
+                     Storage Size: ${(report.storage.totalSize / 1024).toFixed(1)} KB<br>
+                     Recommendations: ${recommendationCount}<br>
+                     <br>
+                     Check console for full report details.`, 
+                    'info');
+                
+                console.log('📊 Full Debug Report:', report);
+                
+            } catch (error) {
+                logError('❌ Debug report error: ' + error.message);
+                showResult('performance-result', 
+                    `<strong>Error:</strong> ${error.message}`, 'error');
+            }
+        };
+        
+        // Initialize when page loads
+        window.addEventListener('load', initialize);
+        
+    </script>
+</body>
+</html>

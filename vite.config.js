@@ -18,7 +18,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: 'index.html',
-        osm: 'test-osm-routing.html'
+        osm: 'test-osm-routing.html',
+        routeDemo: 'route-storage-demo.html'
       }
     }
   },

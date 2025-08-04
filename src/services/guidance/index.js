@@ -4,3 +4,4 @@
 export { GuidanceService } from './GuidanceService.js';
 export { GuidedTourService } from './GuidedTourService.js';
 export { BackOnTrackService } from './BackOnTrackService.js';
+export { EnhancedGuidanceService } from './EnhancedGuidanceService.js';
